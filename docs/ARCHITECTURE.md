@@ -42,6 +42,7 @@ lib/
     prompts/                # extract-tender.v1.ts (versioned TS modules, not markdown files)
     schemas.ts              # zod schemas for every LLM output
   recommendation/ recommend.ts, profit.ts, deadline.ts, decision.ts, trail.ts
+  plan/         build.ts (action plan, no model call), save.ts, load.ts
   pdf/          parse.ts (unpdf → pages[]), ocr.ts
   retrieval/    bm25.ts
   verify/       quote-check.ts
@@ -76,12 +77,13 @@ All tables have `id uuid pk default gen_random_uuid()`, `created_at timestamptz 
 | `decisions` | opportunity_id, choice (`bid`/`bid_higher`/`ask_advance`/`skip`), note, decided_by, snapshot_json | Human decision log |
 | `stage_reviews` | tender_id, stage (`can_bid`/`can_comply`/`should_bid`), reviewer_name, note | Insert-only review of each assessment step. The start of the decision trail. |
 | `bid_decisions` | tender_id, recommended_label, final_label, action (`approve`/`override`), reason, reviewer_name | Insert-only. The latest `final_label` is the decision on the tender and on the list. |
+| `action_items` | tender_id, item_key, kind (`document`/`question`/`outline`/`date`), owner_name, due_on, done | The preparation plan is rebuilt in `lib/plan` from extracted fields. This table keeps only the owner, due date and done tick, upserted on `(tender_id, item_key)`. |
 | `proposals` | opportunity_id, version int, brief_md, draft_md, status (`draft`/`in_review`/`approved`), placeholders_json | Editable, versioned |
 | `activities` | opportunity_id, kind (`status_change`/`note`/`edit`/`duplicate_flag`), payload_json, actor | Audit trail and pipeline history |
 | `duplicate_candidates` | opportunity_id, candidate_id, score, reasons_json, resolution (`open`/`not_duplicate`/`same`) | Never auto-merge |
 | `extraction_runs` | source_id, provider, model, prompt_version, status (`running`/`succeeded`/`failed`), error, stats_json, finished_at | One log row per extraction. At most one running or succeeded run per source |
 
-RLS: on for all tables. The app uses the service role on the server only; the browser reads through server components/actions. `stage_reviews` and `bid_decisions` are insert-only (triggers refuse update and delete).
+RLS: on for all tables. The app uses the service role on the server only; the browser reads through server components/actions. `stage_reviews` and `bid_decisions` are insert-only (triggers refuse update and delete). `action_items` can be updated: the tick, the owner and the due date change.
 
 ## 5. Pipelines
 ### 5.1 Tender extraction (`POST /api/tenders/:id/extract`)
@@ -128,6 +130,8 @@ Requirements + capabilities → LLM proposes a match per requirement with `capab
   - **Bid:** otherwise.
   - Output: choice + reasons[] + clarification questions[] (from clause flags). An LLM may **phrase** the reasons; it may not change the choice.
 - The screen uses `lib/recommendation/recommend.ts` (no model call). Rules, first match wins: **Consider declining** (a could-disqualify item that cannot be fixed before the deadline, or Severe payment risk with no contract value); **Resolve blockers** (a missing document or gap that can still be fixed); **Seek clarification** (deadline, security or evaluation is blank or needs a person); **Proceed to preparation**. A person approves or overrides into `bid_decisions`. Profit uses `margin.ts` once contract value and delivery cost are saved, at day 0 and at the band scenario (Severe 730, High 365, Moderate 180, Low 60).
+- Step 4, **How do we proceed?**, is `lib/plan/build.ts` (no model call). It lists missing or expired mandatory documents, one clarification question per blank or needs-human key fact, response sections in evaluation-criterion order then mandatory requirements, and the submission deadline. A clarification deadline or site visit is included only when that date is already in an extracted field. Owner, due date and done live in `action_items`.
+- Document names match through `lib/readiness/synonyms.ts`: bid bond = tender security = bid security, CR12 = list of directors, tax compliance = KRA compliance certificate. A service with a similar name still does not count as the certificate.
 
 ### 5.4 Field lead extraction (`POST /api/leads/extract`)
 Input: Form 1 / text / image / audio. Audio → Sauti STT → transcript (stored as a source). Image → vision LLM → transcript with uncertain spans. Then LLM → Form 1 candidate fields with confidence → `normalize.ts` (dates incl. "Fri" → next Friday from the capture date, phones to `+2547…`, org names, industry labels) → `duplicates.ts` (exact phone/email/reference = strong; normalized-name Jaro-Winkler ≥ 0.9 = likely) → user confirms → save.

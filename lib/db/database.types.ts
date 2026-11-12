@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      action_items: {
+        Row: {
+          created_at: string
+          done: boolean
+          due_on: string | null
+          id: string
+          item_key: string
+          kind: string
+          owner_name: string | null
+          tender_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          done?: boolean
+          due_on?: string | null
+          id?: string
+          item_key: string
+          kind: string
+          owner_name?: string | null
+          tender_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          done?: boolean
+          due_on?: string | null
+          id?: string
+          item_key?: string
+          kind?: string
+          owner_name?: string | null
+          tender_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_items_tender_id_fkey"
+            columns: ["tender_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       activities: {
         Row: {
           actor: string

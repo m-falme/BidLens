@@ -135,3 +135,20 @@
     @apply font-sans;
   }
 }
+
+@media print {
+  [data-slot="sidebar"],
+  [data-slot="sidebar-gap"],
+  [data-slot="sidebar-container"],
+  [data-slot="sidebar-rail"],
+  header,
+  footer,
+  .no-print {
+    display: none !important;
+  }
+
+  [data-slot="sidebar-inset"] {
+    margin: 0 !important;
+    width: 100% !important;
+  }
+}

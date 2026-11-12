@@ -19,6 +19,7 @@ function item(
     onChecklist: false,
     unlisted: false,
     ...partial,
+    expired: partial.expired ?? false,
   };
 }
 

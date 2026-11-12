@@ -1,6 +1,8 @@
 import { COMPANY_PAPERS, documentIsExpired, type DocumentHolding } from "@/lib/company/papers";
 import type { CapabilityKind } from "@/lib/db/vocab";
 
+import { documentSynonym } from "./synonyms";
+
 /**
  * Match tender requirements to company capabilities. Code only.
  * A requirement is `met` only when it points at a capability in the list passed in.
@@ -54,6 +56,8 @@ export interface MatchedRequirement {
   onChecklist: boolean;
   /** The tender asks for a document that is not on the company list yet. */
   unlisted: boolean;
+  /** The company paper that would satisfy this line is expired. */
+  expired: boolean;
 }
 
 export interface ReadinessResult {
@@ -207,10 +211,17 @@ function met(requirement: RequirementInput, capability: ProfileCapability, voice
     disqualifying: false,
     onChecklist: capability.kind === "document" || capability.kind === "certification",
     unlisted: false,
+    expired: false,
   };
 }
 
-function missing(requirement: RequirementInput, rationale: string, unlisted = false): MatchedRequirement {
+function missing(
+  requirement: RequirementInput,
+  rationale: string,
+  unlisted = false,
+  expired = false,
+  capabilityName: string | null = null,
+): MatchedRequirement {
   return {
     text: requirement.text,
     category: requirement.category,
@@ -218,13 +229,14 @@ function missing(requirement: RequirementInput, rationale: string, unlisted = fa
     quote: requirement.quote,
     match: "missing",
     capabilityId: null,
-    capabilityName: null,
+    capabilityName,
     evidenceRef: null,
     rationale,
     selfDeclared: false,
     disqualifying: requirement.category === "mandatory",
     onChecklist: false,
     unlisted,
+    expired,
   };
 }
 
@@ -243,6 +255,7 @@ function unclear(requirement: RequirementInput, rationale: string): MatchedRequi
     disqualifying: false,
     onChecklist: false,
     unlisted: false,
+    expired: false,
   };
 }
 
@@ -261,7 +274,58 @@ function toPrepare(requirement: RequirementInput, rationale: string): MatchedReq
     disqualifying: false,
     onChecklist: false,
     unlisted: false,
+    expired: false,
   };
+}
+
+/** A checklist paper, or another document that uses the same name for it. */
+function paperFor(text: string): (typeof COMPANY_PAPERS)[number] | undefined {
+  const byPattern = COMPANY_PAPERS.find((item) => item.pattern.test(text));
+  if (byPattern) return byPattern;
+  const group = documentSynonym(text);
+  if (!group) return undefined;
+  return COMPANY_PAPERS.find((item) => documentSynonym(item.name) === group);
+}
+
+/** Documents and certifications whose name is a synonym of this requirement. Services are ignored. */
+function synonymDocuments(text: string, capabilities: readonly ProfileCapability[]): ProfileCapability[] {
+  const group = documentSynonym(text);
+  if (!group) return [];
+  return capabilities.filter(
+    (capability) =>
+      (capability.kind === "document" || capability.kind === "certification") &&
+      documentSynonym(capability.name) === group,
+  );
+}
+
+function notHeld(
+  requirement: RequirementInput,
+  capability: ProfileCapability,
+  asOf: string,
+  voice: CompanyVoice,
+): MatchedRequirement {
+  const state = holdingWords(capability, asOf);
+  return missing(
+    requirement,
+    `${voice.actor} has marked "${capability.name}" as ${state}. It is not met.`,
+    false,
+    state === "Expired",
+    capability.name,
+  );
+}
+
+/** Prefer a paper the company holds. A Don't have row is used only when nothing held shares the name. */
+function paperCapability(
+  paperName: string,
+  text: string,
+  capabilities: readonly ProfileCapability[],
+  asOf: string,
+): ProfileCapability | undefined {
+  const named = capabilities.find((item) => item.name === paperName);
+  const synonyms = synonymDocuments(text, capabilities);
+  if (named && isHeld(named, asOf)) return named;
+  const held = synonyms.find((item) => isHeld(item, asOf));
+  return held ?? named ?? synonyms[0];
 }
 
 function matchOne(
@@ -279,16 +343,11 @@ function matchOne(
     );
   }
 
-  const paper = COMPANY_PAPERS.find((item) => item.pattern.test(text));
+  const paper = paperFor(text);
   if (paper) {
-    const capability = capabilities.find((item) => item.name === paper.name);
+    const capability = paperCapability(paper.name, text, capabilities, asOf);
     if (capability && isHeld(capability, asOf)) return met(requirement, capability, voice);
-    if (capability) {
-      return missing(
-        requirement,
-        `${voice.actor} has marked "${capability.name}" as ${holdingWords(capability, asOf)}. It is not met.`,
-      );
-    }
+    if (capability) return notHeld(requirement, capability, asOf, voice);
   }
 
   if (HELD_PROOF.test(text)) {
@@ -296,19 +355,26 @@ function matchOne(
     if (capability) return met(requirement, capability, voice);
     const listed = findCapability(text, capabilities, new Set(["document", "certification"]), asOf, true);
     if (listed && isHeld(listed, asOf)) return met(requirement, listed, voice);
-    if (listed) {
-      return missing(
-        requirement,
-        `${voice.actor} has marked "${listed.name}" as ${holdingWords(listed, asOf)}. It is not met.`,
-      );
-    }
-    const knownPaper = COMPANY_PAPERS.some((item) => item.pattern.test(text));
+    if (listed) return notHeld(requirement, listed, asOf, voice);
+    const synonyms = synonymDocuments(text, capabilities);
+    const synonym = synonyms.find((item) => isHeld(item, asOf)) ?? synonyms[0];
+    if (synonym && isHeld(synonym, asOf)) return met(requirement, synonym, voice);
+    if (synonym) return notHeld(requirement, synonym, asOf, voice);
+    const group = documentSynonym(text);
+    const knownPaper = COMPANY_PAPERS.some(
+      (item) => item.pattern.test(text) || (group !== null && documentSynonym(item.name) === group),
+    );
     return missing(
       requirement,
       `${cap(voice.profile)} has no certificate, licence or document that covers this. It is not marked met.`,
       !knownPaper,
     );
   }
+
+  const synonyms = synonymDocuments(text, capabilities);
+  const synonym = synonyms.find((item) => isHeld(item, asOf)) ?? synonyms[0];
+  if (synonym && isHeld(synonym, asOf)) return met(requirement, synonym, voice);
+  if (synonym) return notHeld(requirement, synonym, asOf, voice);
 
   if (EXPERIENCE.test(text)) {
     const capability = findCapability(text, capabilities, new Set(["experience"]), asOf);

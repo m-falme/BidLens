@@ -34,7 +34,7 @@ function pgliteWriter(db: PGlite): SeedWriter {
 }
 
 const TABLES = [
-  "activities", "bid_decisions", "capabilities", "companies", "county_pending_bills", "county_risk",
+  "action_items", "activities", "bid_decisions", "capabilities", "companies", "county_pending_bills", "county_risk",
   "decisions", "duplicate_candidates", "fields", "opportunities", "proposals", "requirements",
   "risk_assessments", "source_pages", "sources", "stage_reviews",
 ];
@@ -59,6 +59,7 @@ beforeAll(async () => {
   await db.exec(readFileSync("supabase/migrations/0005_stage_reviews.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0006_decisions.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0007_document_never_expires.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0008_action_items.sql", "utf8"));
   plan = await buildSeedPlan(process.cwd());
   await runSeed(plan.steps, pgliteWriter(db));
 }, 120_000);
@@ -143,6 +144,35 @@ describe("0006_decisions.sql", () => {
     await expect(
       db.query(`update public.opportunities set contract_value_kes = -1 where id = $1`, [opportunity.id]),
     ).rejects.toThrow(/contract_value_kes/);
+  });
+});
+
+describe("0008_action_items.sql", () => {
+  it("stores an owner, a due date and a done tick, and allows a later change", async () => {
+    const opportunity = await one<{ id: string }>(`select id from public.opportunities limit 1`);
+    await db.query(
+      `insert into public.action_items (tender_id, item_key, kind, owner_name, due_on, done)
+       values ($1, 'document:30:tax', 'document', 'Amina', '2026-11-18', false)`,
+      [opportunity.id],
+    );
+    await db.query(
+      `update public.action_items set done = true, owner_name = 'James' where item_key = 'document:30:tax'`,
+    );
+    expect(
+      await one(`select owner_name, due_on::text as due_on, done from public.action_items where item_key = 'document:30:tax'`),
+    ).toEqual({ owner_name: "James", due_on: "2026-11-18", done: true });
+    await expect(
+      db.query(
+        `insert into public.action_items (tender_id, item_key, kind) values ($1, 'document:30:tax', 'document')`,
+        [opportunity.id],
+      ),
+    ).rejects.toThrow(/action_items_tender_id_item_key_key/);
+    await expect(
+      db.query(
+        `insert into public.action_items (tender_id, item_key, kind) values ($1, 'email-buyer', 'email')`,
+        [opportunity.id],
+      ),
+    ).rejects.toThrow(/action_items_kind_check/);
   });
 });
 

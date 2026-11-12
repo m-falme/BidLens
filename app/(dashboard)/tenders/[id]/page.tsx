@@ -13,6 +13,7 @@ import { RiskBadge } from "@/components/tenders/markers";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getWorkspaceName } from "@/lib/db/queries/company";
+import { listActionItems } from "@/lib/db/queries/action-items";
 import { listBidDecisions } from "@/lib/db/queries/bid-decisions";
 import { listDemoCapabilities, replaceReadiness } from "@/lib/db/queries/readiness";
 import { listStageReviews } from "@/lib/db/queries/stage-reviews";
@@ -33,6 +34,7 @@ import {
   sentenceCase,
 } from "@/lib/format/display";
 import { presentLeadCopy, sourceLabel } from "@/lib/leads/public-names";
+import { buildActionPlan, mergeSaved, planFinding, planProgress, type PlanField } from "@/lib/plan/build";
 import { FIELD_STATUSES } from "@/lib/db/vocab";
 import { isWithdrawnByAddendum, matchRequirements } from "@/lib/readiness/match";
 import { daysUntilDeadline } from "@/lib/recommendation/deadline";
@@ -48,7 +50,8 @@ import { commercialFinding, complianceFinding, formatReviewedAt, interpretationF
 import { buildWhatMatters } from "@/lib/tenders/what-matters";
 import { cn } from "@/lib/utils";
 
-import { AgentSection, AssessmentStepper } from "./assessment-journey";
+import { ActionPlan } from "./action-plan";
+import { AgentSection, AssessmentStepper, ProceedSection } from "./assessment-journey";
 import { DecisionTrail } from "./decision-trail";
 import { ExtractionStatus, type SourceStatus } from "./extraction-status";
 import { ProfitCard } from "./profit-card";
@@ -77,12 +80,13 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
   await connection();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
-  const [detail, counties, stageReviews, bidDecisions, workspaceName] = await Promise.all([
+  const [detail, counties, stageReviews, bidDecisions, workspaceName, savedActions] = await Promise.all([
     getTenderDetail(id),
     listCountyRisk(),
     listStageReviews(id),
     listBidDecisions(id),
     getWorkspaceName(),
+    listActionItems(id),
   ]);
   if (!detail) notFound();
 
@@ -178,6 +182,28 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
   } catch (error) {
     readinessError = error instanceof Error ? error.message : "Readiness could not be saved.";
   }
+  const planFields: PlanField[] = viewFields.map((field) => ({
+    key: field.key,
+    value: field.value,
+    status: field.status,
+    pageNo: field.page_no,
+    role: roleOf(field.source_id),
+    ordinal: field.ordinal,
+  }));
+  const actionPlan = buildActionPlan({
+    requirements: readiness.items.map((item) => ({
+      text: item.text,
+      pageNo: item.pageNo,
+      match: item.match,
+      expired: item.expired,
+      documentName: item.capabilityName,
+    })),
+    fields: planFields,
+    deadlineAt: opportunity.deadline_at,
+    asOf: new Date(),
+  });
+  const planRows = mergeSaved(actionPlan, savedActions);
+  const plan = planProgress(planRows);
 
   const pageTexts = Object.fromEntries(
     citedPages.map((p) => [`${p.source_id}:${p.page_no}`, present(p.text, p.source_id) ?? p.text]),
@@ -270,7 +296,7 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
 
       <DecisionCard decision={latestDecision} />
 
-      <AssessmentStepper reviews={reviews} />
+      <AssessmentStepper reviews={reviews} planDone={plan.done} planTotal={plan.total} />
 
       <AgentSection
         stage="can_bid"
@@ -370,6 +396,10 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
         />
         <RecommendationCard tenderId={opportunity.id} recommendation={recommendation} />
       </AgentSection>
+
+      <ProceedSection finding={planFinding(actionPlan)} progressLabel={plan.label}>
+        <ActionPlan tenderId={opportunity.id} rows={planRows} editable />
+      </ProceedSection>
 
       {pdfSources.length > 0 && <ExtractionStatus opportunityId={opportunity.id} sources={sourceStatuses} />}
       <DecisionTrail entries={trail} />

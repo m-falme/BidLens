@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { BarChart3, Check, ChevronRight, FileSearch, ShieldCheck } from "lucide-react";
+import { BarChart3, Check, ChevronRight, FileSearch, ListChecks, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { formatReviewedAt, REVIEW_STAGES, type ReviewStage, type StageReviewRecord } from "@/lib/tenders/stage-review";
@@ -29,9 +29,15 @@ const STAGE_META: Record<ReviewStage, { title: string; agent: string; summary: s
 
 export function AssessmentStepper({
   reviews,
+  planDone,
+  planTotal,
 }: {
   reviews: Record<ReviewStage, StageReviewRecord | null>;
+  planDone: number;
+  planTotal: number;
 }) {
+  const planLabel = planTotal === 0 ? "Preparation" : `${planDone} of ${planTotal} done`;
+  const planComplete = planTotal > 0 && planDone === planTotal;
   return (
     <nav aria-label="Assessment steps">
       <ol className="flex flex-col gap-2 md:flex-row md:items-stretch">
@@ -65,6 +71,27 @@ export function AssessmentStepper({
             </li>
           );
         })}
+        <li className="flex min-w-0 flex-1 items-center gap-2">
+          <ChevronRight className="hidden size-5 shrink-0 text-primary md:block" aria-hidden />
+          <a
+            href="#proceed"
+            className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border bg-card px-4 py-3 shadow-sm transition hover:border-primary/40 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            <span
+              className={
+                planComplete
+                  ? "flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                  : "flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
+              }
+            >
+              {planComplete ? <Check className="size-4" aria-hidden /> : 4}
+            </span>
+            <span className="min-w-0">
+              <span className="block font-semibold">How do we proceed?</span>
+              <span className="block text-sm text-muted-foreground">{planLabel}</span>
+            </span>
+          </a>
+        </li>
       </ol>
     </nav>
   );
@@ -109,6 +136,41 @@ export function AgentSection({
           </div>
         </div>
         <StageReviewForm tenderId={tenderId} stage={stage} reviewedLabel={reviewedLabel} />
+      </div>
+      {children}
+    </section>
+  );
+}
+
+export function ProceedSection({
+  finding,
+  progressLabel,
+  children,
+}: {
+  finding: string;
+  progressLabel: string;
+  children: ReactNode;
+}) {
+  return (
+    <section id="proceed" className="flex scroll-mt-20 flex-col gap-4">
+      <div className="flex flex-col gap-3 rounded-2xl border bg-card p-5 shadow-sm">
+        <div className="flex min-w-0 gap-3">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <ListChecks className="size-5" aria-hidden />
+          </span>
+          <div className="min-w-0 space-y-1">
+            <p className="text-sm font-medium text-primary">Step 4 · Preparation</p>
+            <h2 className="text-2xl font-semibold tracking-tight">How do we proceed?</h2>
+            <p className="text-muted-foreground">
+              A plan from the documents, questions, response sections and dates already extracted. Nothing is sent.
+            </p>
+            <p className="pt-1">
+              <span className="font-medium">What I found: </span>
+              {finding}
+            </p>
+            <p className="text-lg font-semibold tabular-nums">{progressLabel}</p>
+          </div>
+        </div>
       </div>
       {children}
     </section>

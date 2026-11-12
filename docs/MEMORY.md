@@ -2,7 +2,7 @@
 > Cursor: update this at the end of every step. Keep it under ~60 lines. Newest first in "Log".
 
 ## Status
-- **Current step:** 6b done. Counties stays off the sidebar. Expiry is optional. A met requirement links to the company document that satisfied it, and a document the list does not have can be added. Deploy still to confirm.
+- **Current step:** 7 done. The tender journey has a fourth step, How do we proceed?, built in code. Deploy still to confirm.
 - **Deployed URL:** —
 - **Repo:** https://github.com/m-falme/BidLens, branch `main`
 - **Gate:** Thu 12 Nov 2026 · assessment 14:00–15:30 EAT · cut 16:00
@@ -15,6 +15,7 @@
 - [ ] 5. Deployed public link with seeded demo data
 
 ## Decisions
+- 2026-11-13: The action plan is code in `lib/plan` (no model call). Documents to get are missing or expired mandatory documents, not forms and not experience lines. One question per blank or needs-human key fact. The outline is evaluation criteria, then mandatory requirements. Clarification deadline and site visit appear only when an extracted field states that date. Owner, due date and done are upserted in `action_items` (0008, pushed). 0007 was already the expiry migration. Synonyms: bid bond = tender security = bid security, CR12 = list of directors, tax compliance = KRA compliance certificate. A service with a similar name still does not count.
 - 2026-11-13: Counties is not in the sidebar. The route stays. Assess Viability opens the latest uploaded tender at Should we bid? The payment card shows that county's band, score and one line (ageing, size, trend), plus See all counties. A document is expired only when `expires_on` is before today (`documentIsExpired`). KRA PIN, Certificate of incorporation and CR12 start with Does not expire (`never_expires`, 0007). A requirement that matches no company document is unlisted until Add to my documents inserts it under Other documents as Don't have. Marking it Have links the next readiness run.
 - 2026-11-13: Recommendation is code in `lib/recommendation` (no model call). First match wins: Consider declining, Resolve blockers, Seek clarification, Proceed to preparation. A licence, certification, audited history or experience line that could disqualify us cannot be obtained for this bid. Any other missing document is treated as fixable when 7 or more days remain, or as too late when the deadline is unknown, past, or closer than that. Severe payment risk with no saved contract value is also Consider declining.
 - 2026-11-13: Profit uses `margin.ts` at day 0 and at the band scenario (Low 60, Moderate 180, High 365, Severe 730). Loan rate is 16% a year because the company profile has none. The screen does not call that rate an example. Contract value and delivery cost are nullable columns on `opportunities`, left out of the seed so a re-seed does not clear them. `bid_decisions` is insert-only (0006, pushed). The latest final label is the top decision card and the list badge.
@@ -60,7 +61,7 @@
 - Free-tier Gemini: `gemini-3.6-flash` is 20 requests/day (exhausted while choosing a model). Live calls use `gemini-3.5-flash-lite`. A demand spike retries once.
 - Field inserts are chunked (200) without a transaction; a mid-insert failure could leave partial fields on a failed run (runs are ~<200 fields, so one chunk in practice).
 - Scanned PDFs (e.g. Nyamira advert, 0 text): run fails with a clear "no text layer, OCR not available" message. OCR is a later step.
-- PGlite schema test applies 0001, 0004, 0005, 0006 and 0007. 0002 is on the live database. 0003 touches `storage.buckets`, which PGlite does not have. 0007 must be on the remote database before the company page reads `never_expires`.
+- PGlite schema test applies 0001 and 0004 through 0008. 0002 is on the live database. 0003 touches `storage.buckets`, which PGlite does not have. 0007 and 0008 are on the remote database.
 - MsingiAI Sauti endpoint, auth format and limits: get from the challenge owner.
 - Ask mentors: must both intake options (field + procurement) be shown, or is one deep enough?
 - Vercel project not linked; Vercel env vars must use the project URL with no path.
@@ -70,6 +71,7 @@
 - npm held back esbuild's postinstall (allowScripts); tsx works regardless.
 
 ## Log
+- 2026-11-13 01:30 — Action plan as step 4. Documents, buyer questions, response outline and key dates, with owner, due date and done. 0008 pushed. Synonyms so Nairobi's tender security matches the existing bid bond. 173 tests. Checked on Nairobi: 6 documents, 4 questions, 30 sections, submission deadline 7 days left.
 - 2026-11-13 00:55 — Simpler counties, optional expiry, document-to-requirement link. Counties off the sidebar. Does not expire on KRA PIN, incorporation and CR12. Met lines link to Your company. Unlisted requirements can be added. 0007 pushed. 155 tests. Makueni's bid bond was added to Other documents as Don't have while checking the button.
 - 2026-11-13 00:30 — Recommendation, profit view and decision trail. Four labels, first rule wins. Profit appears after contract value and delivery cost are saved. Approve or override writes `bid_decisions` (0006 pushed). 150 tests.
 - 2026-11-12 23:30 — Purple theme and agent journey. Home greeting plus Analyse Tender, Check Compliance, Assess Viability. Tender page is three steps with insert-only `stage_reviews` (0005 pushed). Workspace label reads the company name. 126 tests.

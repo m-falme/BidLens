@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ExternalLink, GitCompareArrows } from "lucide-react";
 
 import { EvidenceChip, StatusBadge } from "@/components/evidence/status-badge";
@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { FieldStatus, SourceRole } from "@/lib/db/vocab";
 import type { AddendumConflict } from "@/lib/tenders/addendum-conflicts";
 import { fieldLabel, LIST_FIELD_KEYS, SCALAR_FIELD_KEYS } from "@/lib/tenders/field-catalog";
+import type { MatterPoint } from "@/lib/tenders/what-matters";
 import { decideFieldStatus, STATUS_REASON_TEXT } from "@/lib/verify/field-status";
 import { findQuoteSpan } from "@/lib/verify/quote-check";
 
@@ -43,6 +44,9 @@ const LIST_TITLES: Record<string, string> = {
   evaluation_criterion: "Evaluation criteria",
   addendum_change: "Changes made by the addendum",
 };
+
+/** Long lists stay closed until someone asks for them. The count stays visible. */
+const COLLAPSED_LISTS = new Set(["eligibility", "mandatory_requirement", "technical_scope"]);
 
 function ValueText({ field }: { field: ViewField }) {
   if (field.value !== null) return <span className="whitespace-pre-line">{field.value}</span>;
@@ -111,14 +115,25 @@ function FieldsForSource({ fields, onOpen }: { fields: ViewField[]; onOpen: (f: 
           <FieldTable fields={scalar} showKey onOpen={onOpen} />
         </section>
       )}
-      {lists.map(([key, list]) => (
-        <section key={key} className="flex flex-col gap-2">
-          <h3 className="text-lg font-semibold">
-            {LIST_TITLES[key]} <span className="font-normal text-muted-foreground">({list.length})</span>
-          </h3>
-          <FieldTable fields={list} showKey={false} onOpen={onOpen} />
-        </section>
-      ))}
+      {lists.map(([key, list]) =>
+        COLLAPSED_LISTS.has(key) ? (
+          <details key={key} className="rounded-lg border">
+            <summary className="cursor-pointer px-4 py-3 text-lg font-semibold">
+              {LIST_TITLES[key]} <span className="font-normal text-muted-foreground">({list.length})</span>
+            </summary>
+            <div className="px-2 pb-3">
+              <FieldTable fields={list} showKey={false} onOpen={onOpen} />
+            </div>
+          </details>
+        ) : (
+          <section key={key} className="flex flex-col gap-2">
+            <h3 className="text-lg font-semibold">
+              {LIST_TITLES[key]} <span className="font-normal text-muted-foreground">({list.length})</span>
+            </h3>
+            <FieldTable fields={list} showKey={false} onOpen={onOpen} />
+          </section>
+        ),
+      )}
     </div>
   );
 }
@@ -247,17 +262,63 @@ function EvidencePanel({
   );
 }
 
+function WhatMattersCard({
+  points,
+  fields,
+  onOpen,
+}: {
+  points: MatterPoint[];
+  fields: Map<string, ViewField>;
+  onOpen: (field: ViewField) => void;
+}) {
+  if (points.length === 0) return null;
+  return (
+    <Card className="border-primary/40">
+      <CardHeader>
+        <CardTitle className="text-xl">What matters</CardTitle>
+        <CardDescription>The facts that change a bid. Each chip opens the quote it comes from.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ol className="flex list-none flex-col gap-3">
+          {points.map((point, index) => (
+            <li key={point.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1.5">
+              <span className="font-semibold text-muted-foreground tabular-nums">{index + 1}.</span>
+              <span>{point.text}</span>
+              {point.fieldIds.map((id) => {
+                const field = fields.get(id);
+                if (!field) return null;
+                return (
+                  <EvidenceChip
+                    key={id}
+                    status={field.status}
+                    page={field.page_no}
+                    onClick={() => onOpen(field)}
+                  />
+                );
+              })}
+            </li>
+          ))}
+        </ol>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function FieldsView({
   fields,
   sources,
   conflicts,
   pageTexts,
+  matters,
+  children,
 }: {
   fields: ViewField[];
   sources: ViewSource[];
   conflicts: AddendumConflict[];
   /** `${source_id}:${page_no}` → page text, for every cited page. */
   pageTexts: Record<string, string>;
+  matters: MatterPoint[];
+  children?: ReactNode;
 }) {
   const [open, setOpen] = useState<ViewField | null>(null);
   const byId = new Map(fields.map((f) => [f.id, f]));
@@ -265,6 +326,8 @@ export function FieldsView({
 
   return (
     <div className="flex flex-col gap-8">
+      <WhatMattersCard points={matters} fields={byId} onOpen={setOpen} />
+      {children}
       {conflicts.length > 0 && (
         <Card className="border-amber-300 dark:border-amber-800">
           <CardHeader>

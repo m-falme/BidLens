@@ -9,11 +9,13 @@ import { z } from "zod";
 import { STATUS_META } from "@/components/evidence/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getTenderDetail, type RunRecord } from "@/lib/db/queries/tenders";
+import { getTenderDetail, listSecurityPages, type RunRecord } from "@/lib/db/queries/tenders";
 import { FIELD_STATUSES } from "@/lib/db/vocab";
 import type { GroupStats } from "@/lib/tenders/extract-pipeline";
+import { findBidSecurityConflicts } from "@/lib/tenders/document-conflicts";
 import { ADDENDUM_FIELD_GROUPS, MAIN_FIELD_GROUPS } from "@/lib/tenders/field-catalog";
 import { summarizeReview } from "@/lib/tenders/review";
+import { buildWhatMatters } from "@/lib/tenders/what-matters";
 import { cn } from "@/lib/utils";
 
 import { ExtractionStatus, type SourceStatus } from "./extraction-status";
@@ -90,7 +92,23 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
       f.value === null && f.quote === null && !!f.source_id && !!failedBySource.get(f.source_id)?.has(f.key),
   }));
 
-  const summary = summarizeReview(viewFields, new Map(sources.map((s) => [s.id, s.role])));
+  const sourceRoles = new Map(sources.map((s) => [s.id, s.role]));
+  const summary = summarizeReview(viewFields, sourceRoles);
+  const mainSourceIds = sources.filter((s) => s.role === "main").map((s) => s.id);
+  const securityPages = await listSecurityPages(mainSourceIds);
+  const matters = buildWhatMatters({
+    fields: viewFields.map((field) => ({
+      id: field.id,
+      key: field.key,
+      value: field.value,
+      status: field.status,
+      page_no: field.page_no,
+      role: field.source_id ? (sourceRoles.get(field.source_id) ?? "main") : "main",
+    })),
+    conflict: findBidSecurityConflicts(securityPages.map((page) => ({ pageNo: page.page_no, text: page.text }))),
+    needsHuman: summary.byStatus.needs_human,
+    addendumConflicts: summary.conflicts.length,
+  });
   const pageTexts = Object.fromEntries(citedPages.map((p) => [`${p.source_id}:${p.page_no}`, p.text]));
   const hasMainPdf = pdfSources.some((s) => s.role === "main");
 
@@ -110,6 +128,13 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
         )}
       </div>
 
+      <FieldsView
+        fields={viewFields}
+        sources={sources.map((s) => ({ id: s.id, name: s.original_name, role: s.role, fileUrl: fileUrls[s.id] ?? null }))}
+        conflicts={summary.conflicts}
+        pageTexts={pageTexts}
+        matters={matters}
+      >
       {summary.total > 0 && (
         <Card>
           <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-4">
@@ -147,13 +172,7 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
       )}
 
       {pdfSources.length > 0 && <ExtractionStatus opportunityId={opportunity.id} sources={sourceStatuses} />}
-
-      <FieldsView
-        fields={viewFields}
-        sources={sources.map((s) => ({ id: s.id, name: s.original_name, role: s.role, fileUrl: fileUrls[s.id] ?? null }))}
-        conflicts={summary.conflicts}
-        pageTexts={pageTexts}
-      />
+      </FieldsView>
     </div>
   );
 }

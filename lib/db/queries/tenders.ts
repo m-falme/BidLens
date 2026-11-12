@@ -172,6 +172,22 @@ export async function getTenderDetail(opportunityId: string): Promise<TenderDeta
   };
 }
 
+/**
+ * Pages whose text mentions bid security, so an in-document amount conflict can be
+ * found without loading a 200-page tender. The scan itself is pure (document-conflicts.ts).
+ */
+export async function listSecurityPages(sourceIds: readonly string[]): Promise<CitedPage[]> {
+  if (sourceIds.length === 0) return [];
+  const { data, error } = await getServiceClient()
+    .from("source_pages")
+    .select("source_id, page_no, text")
+    .in("source_id", [...sourceIds])
+    .or("text.ilike.%tender security%,text.ilike.%bid security%,text.ilike.%bid bond%")
+    .order("page_no");
+  if (error) fail("load security pages", error);
+  return data;
+}
+
 async function loadPages(refs: readonly { source_id: string; page_no: number }[]): Promise<CitedPage[]> {
   const bySource = Map.groupBy(refs, (r) => r.source_id);
   const results = await Promise.all(

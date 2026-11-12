@@ -28,7 +28,7 @@ function fail(context: string, error: { message: string } | null): never {
 
 export async function getDemoCompanyId(): Promise<string> {
   const { data, error } = await getServiceClient().from("companies").select("id").eq("name", DEMO_COMPANY_NAME).single();
-  if (error || !data) fail(`demo company "${DEMO_COMPANY_NAME}" not found (run npm run db:seed)`, error);
+  if (error || !data) fail(`company "${DEMO_COMPANY_NAME}" was not found`, error);
   return data.id;
 }
 

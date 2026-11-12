@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { listDemoCapabilities, replaceReadiness } from "@/lib/db/queries/readiness";
 import { getTenderDetail, listSecurityPages, type RunRecord } from "@/lib/db/queries/tenders";
+import { presentLeadCopy, sourceLabel } from "@/lib/leads/public-names";
 import { FIELD_STATUSES } from "@/lib/db/vocab";
 import { isWithdrawnByAddendum, matchRequirements } from "@/lib/readiness/match";
 import type { GroupStats } from "@/lib/tenders/extract-pipeline";
@@ -54,10 +55,13 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
   const succeededRun = (sourceId: string) => runs.find((r) => r.source_id === sourceId && r.status === "succeeded");
 
   const pdfSources = sources.filter((s) => s.kind === "pdf");
+  const formSourceIds = new Set(sources.filter((s) => s.kind === "form").map((s) => s.id));
+  const workbookLead = pdfSources.length === 0;
+  const present = (value: string | null, sourceId: string | null) =>
+    sourceId && formSourceIds.has(sourceId) ? presentLeadCopy(value) : value;
   const sourceStatuses: SourceStatus[] = pdfSources.map((s) => {
     const run = latestRun.get(s.id);
     const own = pages.filter((p) => p.source_id === s.id);
-    const groups = Object.values(runGroups(run));
     return {
       id: s.id,
       name: s.original_name,
@@ -68,12 +72,10 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
         ? {
             status: run.status,
             error: run.error,
-            model: run.model,
-            promptVersion: run.prompt_version,
             seconds: run.finished_at
               ? Math.round((Date.parse(run.finished_at) - Date.parse(run.created_at)) / 1000)
               : null,
-            tokens: groups.length ? groups.reduce((n, g) => n + g.inputTokens + g.outputTokens, 0) : null,
+            facts: fields.filter((field) => field.source_id === s.id).length,
           }
         : null,
     };
@@ -138,17 +140,27 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
     readinessError = error instanceof Error ? error.message : "Readiness could not be saved.";
   }
 
-  const pageTexts = Object.fromEntries(citedPages.map((p) => [`${p.source_id}:${p.page_no}`, p.text]));
+  const pageTexts = Object.fromEntries(
+    citedPages.map((p) => [`${p.source_id}:${p.page_no}`, present(p.text, p.source_id) ?? p.text]),
+  );
   const hasMainPdf = pdfSources.some((s) => s.role === "main");
+  const displayTitle = workbookLead ? (presentLeadCopy(opportunity.title) ?? opportunity.title) : opportunity.title;
+  const displayOrganization = workbookLead ? presentLeadCopy(opportunity.organization) : opportunity.organization;
+  const displayReference = workbookLead ? presentLeadCopy(opportunity.reference) : opportunity.reference;
+  const displayFields: ViewField[] = viewFields.map((field) => ({
+    ...field,
+    value: present(field.value, field.source_id),
+    quote: present(field.quote, field.source_id),
+  }));
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 space-y-1">
           <p className="text-sm font-medium text-muted-foreground">
-            {[opportunity.reference, opportunity.organization].filter(Boolean).join(" · ") || "Tender"}
+            {[displayReference, displayOrganization].filter(Boolean).join(" · ") || "Tender"}
           </p>
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{opportunity.title}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{displayTitle}</h1>
         </div>
         {hasMainPdf && (
           <Button variant="outline" nativeButton={false} render={<Link href={`/tenders/new?addendum=${opportunity.id}`} />}>
@@ -158,8 +170,19 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
       </div>
 
       <FieldsView
-        fields={viewFields}
-        sources={sources.map((s) => ({ id: s.id, name: s.original_name, role: s.role, fileUrl: fileUrls[s.id] ?? null }))}
+        fields={displayFields}
+        sources={sources.map((s) => ({
+          id: s.id,
+          name:
+            s.kind === "form"
+              ? sourceLabel({
+                  kind: s.kind,
+                  opportunityType: opportunity.type === "field" ? "field" : "procurement",
+                })
+              : s.original_name,
+          role: s.role,
+          fileUrl: fileUrls[s.id] ?? null,
+        }))}
         conflicts={summary.conflicts}
         pageTexts={pageTexts}
         matters={matters}

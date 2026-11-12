@@ -58,7 +58,7 @@ export function AppSidebar() {
           </div>
           <div className="grid leading-tight group-data-[collapsible=icon]:hidden">
             <span className="truncate font-semibold">{DEMO_COMPANY_NAME}</span>
-            <span className="truncate text-xs text-muted-foreground">Demo company</span>
+            <span className="truncate text-xs text-muted-foreground">Bid team</span>
           </div>
         </div>
       </SidebarHeader>

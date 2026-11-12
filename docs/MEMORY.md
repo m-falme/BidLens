@@ -15,6 +15,7 @@
 - [ ] 5. Deployed public link with seeded demo data
 
 ## Decisions
+- 2026-11-12: Screen copy never says demo, synthetic, or a model name. Workbook buyers are shown under fictional names (Lakeview Water Services Board, Mlima Agricultural Research Institute, and three others) with normal references. Stored rows and quotes stay as loaded; a form source (not a pdf) is what marks a workbook lead. Real tender quotes are not rewritten.
 - 2026-11-12: Single Next.js app (no separate Python backend) for speed and one deploy.
 - 2026-11-12: Status of a field is set by code (quote check), never by the LLM.
 - 2026-11-12: Risk = scenarios, never a prediction of payment date.
@@ -65,6 +66,7 @@
 - npm held back esbuild's postinstall (allowScripts); tsx works regardless.
 
 ## Log
+- 2026-11-12 11:20 — Product wording. Sidebar says Bid team. Sources say Uploaded PDF / Imported lead. Analysis line is "Analysed in Ns · N facts found". Workbook SIM-* and "Example …" names are substituted on screen only.
 - 2026-11-12 10:50 — Step 4c: company documents checklist. Nairobi 3 met (self-declared), 13 gaps, 7 could disqualify, 10 to prepare. Makueni 5 met, 1 gap (bid bond), 1 could disqualify, 7 to prepare. NCA line still excluded.
 - 2026-11-12 10:20 — Step 4b: readiness on the tender page. Before company papers: Nairobi 0 met, 26 gaps, 10 could disqualify. NCA line excluded because the addendum removes it.
 - 2026-11-12 10:10 — Step 4a: "What matters" card (max 5 points) on Nairobi and Makueni. In-document bid-security conflict is code over page text (Nairobi p.7 KSh 420,000 vs p.30 KSh 500,000). Eligibility, mandatory and scope lists are closed accordions with counts.

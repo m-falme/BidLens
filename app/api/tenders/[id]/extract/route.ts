@@ -19,8 +19,8 @@ export async function POST(_request: Request, ctx: RouteContext<"/api/tenders/[i
     console.error("extract", id, error);
     const message =
       error instanceof EnvValidationError
-        ? `Extraction is not configured: ${error.problems.join("; ")}`
-        : "Extraction failed unexpectedly. Nothing was saved for the failed document.";
+        ? "Analysis is not configured yet."
+        : "Analysis failed unexpectedly. Nothing was saved for the failed document.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

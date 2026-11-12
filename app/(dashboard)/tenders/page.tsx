@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { listTenders } from "@/lib/db/queries/tenders";
+import { presentLeadCopy, sourceLabel } from "@/lib/leads/public-names";
 
 export const metadata: Metadata = { title: NAV.tenders.title };
 
@@ -32,31 +33,37 @@ async function TenderList() {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {tenders.map((t) => (
-          <TableRow key={t.id}>
-            <TableCell className="max-w-md whitespace-normal">
-              <Link href={`/tenders/${t.id}`} className="font-medium text-primary underline-offset-4 hover:underline">
-                {t.title}
-              </Link>
-              {t.reference && <span className="block text-sm text-muted-foreground">{t.reference}</span>}
-            </TableCell>
-            <TableCell className="whitespace-normal">{t.organization ?? "—"}</TableCell>
-            <TableCell>
-              {t.pdfSources > 0 ? (
-                <span className="flex flex-wrap gap-1">
-                  <Badge variant="secondary">PDF upload</Badge>
-                  {t.addenda > 0 && <Badge variant="outline">+{t.addenda} addendum</Badge>}
-                </span>
-              ) : (
-                <Badge variant="outline">Workbook (synthetic)</Badge>
-              )}
-            </TableCell>
-            <TableCell className="text-right tabular-nums">{t.fieldCount}</TableCell>
-            <TableCell className="text-right tabular-nums">
-              {t.needsHuman > 0 ? <span className="font-semibold text-red-700">{t.needsHuman}</span> : 0}
-            </TableCell>
-          </TableRow>
-        ))}
+        {tenders.map((t) => {
+          const workbook = t.pdfSources === 0;
+          const title = workbook ? (presentLeadCopy(t.title) ?? t.title) : t.title;
+          const reference = workbook ? presentLeadCopy(t.reference) : t.reference;
+          const organization = workbook ? presentLeadCopy(t.organization) : t.organization;
+          return (
+            <TableRow key={t.id}>
+              <TableCell className="max-w-md whitespace-normal">
+                <Link href={`/tenders/${t.id}`} className="font-medium text-primary underline-offset-4 hover:underline">
+                  {title}
+                </Link>
+                {reference && <span className="block text-sm text-muted-foreground">{reference}</span>}
+              </TableCell>
+              <TableCell className="whitespace-normal">{organization ?? "—"}</TableCell>
+              <TableCell>
+                {t.pdfSources > 0 ? (
+                  <span className="flex flex-wrap gap-1">
+                    <Badge variant="secondary">{sourceLabel({ kind: "pdf", opportunityType: "procurement" })}</Badge>
+                    {t.addenda > 0 && <Badge variant="outline">+{t.addenda} addendum</Badge>}
+                  </span>
+                ) : (
+                  <Badge variant="outline">{sourceLabel({ kind: "form", opportunityType: "procurement" })}</Badge>
+                )}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">{t.fieldCount}</TableCell>
+              <TableCell className="text-right tabular-nums">
+                {t.needsHuman > 0 ? <span className="font-semibold text-red-700">{t.needsHuman}</span> : 0}
+              </TableCell>
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
   );

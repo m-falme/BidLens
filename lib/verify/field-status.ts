@@ -37,14 +37,14 @@ export interface FieldStatusDecision {
 
 export const STATUS_REASON_TEXT: Record<StatusReason, string> = {
   quote_confirmed: "The quote was found on the cited page and contains the value.",
-  value_interpreted: "The quote was found on the cited page, but the value is the AI's reading of it, not a verbatim copy.",
+  value_interpreted: "The quote was found on the cited page, but the value is a reading of it, not a verbatim copy.",
   blank_clause_confirmed: "The document has this clause but leaves it blank. The blank clause was found on the cited page.",
-  not_found: "The AI did not find this field in the pages it was given.",
-  quote_not_on_page: "The AI's quote was not found on the cited page, so the value is unverified.",
-  no_quote: "The AI gave a value without a quote, so it cannot be verified.",
-  no_value: "The AI quoted the page but gave no value and the clause is not blank.",
+  not_found: "This was not found in the pages that were read.",
+  quote_not_on_page: "The quote was not found on the cited page, so the value is unverified.",
+  no_quote: "A value was given without a quote, so it cannot be verified.",
+  no_value: "The page was quoted, but no value was given and the clause is not blank.",
   extraction_failed:
-    "Nothing was extracted: the AI output failed validation twice, or no readable pages matched. Check this field in the document.",
+    "Nothing was extracted. The reading failed twice, or no readable pages matched. Check this field in the document.",
 };
 
 /**

@@ -17,10 +17,8 @@ export interface SourceStatus {
   run: {
     status: ExtractionRunStatus;
     error: string | null;
-    model: string;
-    promptVersion: string;
     seconds: number | null;
-    tokens: number | null;
+    facts: number;
   } | null;
 }
 
@@ -80,8 +78,8 @@ export function ExtractionStatus({ opportunityId, sources }: { opportunityId: st
           <Loader2 className="animate-spin" aria-hidden />
           <AlertTitle>Extracting requirements… {requesting && `${elapsed}s`}</AlertTitle>
           <AlertDescription>
-            BidLens picks the relevant pages, asks the model for each field group, then checks every quote against its
-            page in code. Large tenders take up to a minute.
+            Reading the relevant pages and checking each quote against the page it came from. A long document can take
+            up to a minute.
           </AlertDescription>
         </Alert>
       )}
@@ -112,9 +110,9 @@ export function ExtractionStatus({ opportunityId, sources }: { opportunityId: st
               {s.run?.status === "succeeded" && (
                 <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                   <CheckCircle2 className="size-4 text-green-600" aria-hidden />
-                  Extracted with {s.run.model} ({s.run.promptVersion})
+                  Analysed
                   {s.run.seconds !== null && ` in ${s.run.seconds}s`}
-                  {s.run.tokens !== null && ` · ${s.run.tokens.toLocaleString()} tokens`}
+                  {` · ${s.run.facts.toLocaleString()} fact${s.run.facts === 1 ? "" : "s"} found`}
                 </span>
               )}
               {s.run?.status === "failed" && (

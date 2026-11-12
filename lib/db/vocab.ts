@@ -8,6 +8,9 @@ export type FieldStatus = (typeof FIELD_STATUSES)[number];
 
 export type CapabilityKind = "service" | "tool" | "document" | "certification" | "experience" | "sector";
 
+export const DOCUMENT_HOLDINGS = ["have", "dont_have", "expired"] as const;
+export type DocumentHolding = (typeof DOCUMENT_HOLDINGS)[number];
+
 export const OPPORTUNITY_STATUSES = [
   "new",
   "verification_required",

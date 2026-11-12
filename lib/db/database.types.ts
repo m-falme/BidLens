@@ -55,9 +55,13 @@ export type Database = {
           created_at: string
           detail: string | null
           evidence_ref: string | null
+          expires_on: string | null
+          holding: string | null
           id: string
           kind: string
           name: string
+          original_holding: string | null
+          self_declared: boolean
           updated_at: string
           verified: boolean
         }
@@ -66,9 +70,13 @@ export type Database = {
           created_at?: string
           detail?: string | null
           evidence_ref?: string | null
+          expires_on?: string | null
+          holding?: string | null
           id?: string
           kind: string
           name: string
+          original_holding?: string | null
+          self_declared?: boolean
           updated_at?: string
           verified?: boolean
         }
@@ -77,9 +85,13 @@ export type Database = {
           created_at?: string
           detail?: string | null
           evidence_ref?: string | null
+          expires_on?: string | null
+          holding?: string | null
           id?: string
           kind?: string
           name?: string
+          original_holding?: string | null
+          self_declared?: boolean
           updated_at?: string
           verified?: boolean
         }

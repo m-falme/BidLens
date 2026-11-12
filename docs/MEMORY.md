@@ -2,7 +2,7 @@
 > Cursor: update this at the end of every step. Keep it under ~60 lines. Newest first in "Log".
 
 ## Status
-- **Current step:** 4 in progress. What-matters card and readiness are on the tender page. Payment risk, recommendation and deploy still to do.
+- **Current step:** 4 in progress. Company documents and readiness labels are live. Payment risk, recommendation and deploy still to do.
 - **Deployed URL:** —
 - **Repo:** https://github.com/m-falme/BidLens, branch `main`
 - **Gate:** Thu 12 Nov 2026 · assessment 14:00–15:30 EAT · cut 16:00
@@ -32,7 +32,7 @@
 - 2026-11-12: Supabase CLI 3.x targets the local stack by default: always pass `--remote` (`npx supabase db push --remote`, `db query --remote --read-only`). Link and push used a temporary login role, so no DB password was needed or stored.
 - 2026-11-12: CoB retrieved 2026-11-11 (`COB_RETRIEVED_AT`, both the Jun 2025 and Jun 2026 snapshots); figures as at each row's report_date.
 - 2026-11-12: margin.ts nets `ir` in break-even and price-to-keep-margin (ARCHITECTURE §5.3 updated; same result when ir = 0).
-- 2026-11-12: Profile has no certifications/documents/clients → none seeded (74 capabilities: 44 service, 22 tool, 8 sector). `verified=true` means "stated in a company document at evidence_ref".
+- 2026-11-12: The profile PDF has no certifications, named clients or case studies (74 profile rows: 44 service, 22 tool, 8 sector). `verified=true` means "stated in that PDF". Company papers are a separate checklist, not copied from the PDF.
 - 2026-11-12: Migration + seed tested in PGlite (in-memory Postgres) inside Vitest, seeded twice for idempotency.
 - 2026-11-12 (step 3): AI SDK 7 marks `generateObject` deprecated → `lib/ai/extract.ts` uses `generateText` + `Output.object({schema})` (same zod-validated output). Temp 0, 45 s timeout, 1 corrective retry with the zod error, JSON log line per attempt. Model injected (mock in tests); `lib/ai/client.ts` (server-only) picks provider from env.
 - 2026-11-12 (step 3): Prompts are versioned `.ts` files (`lib/ai/prompts/extract-tender.v1.ts`), not `.md`, so no fs reads/file tracing on Vercel. Run stores `prompt_version`.
@@ -42,20 +42,20 @@
 - 2026-11-12 (step 3): Addendum = source `role='addendum'` on the same opportunity; it extracts the scalar groups + `addendum_change` list (with `affects_key`). Conflicts computed at read time (`lib/tenders/addendum-conflicts.ts`): differing scalars, addendum-only values, and each change linked by BM25 to the main item (clear winner only). Real Nairobi addendum removes mandatory req. No. 27 (NCA 1/2 cert, main p.31).
 - 2026-11-12 (step 3): `getDatabaseEnv()` (Supabase vars only) for DB access, so pages work without the LLM key; extraction route returns "Extraction is not configured: …".
 - 2026-11-12 (step 3): New deps: `ai`, `@ai-sdk/google|openai|anthropic` (env-switchable provider), `unpdf`. shadcn: table, badge, alert, label.
-- 2026-11-12 (step 4): Readiness is code-only (`lib/readiness/match.ts`). `met` only with a capability id. Certificates, licences, bid security and experience are `missing` unless a certification/document/experience record matches — a service with a similar name does not count. Forms are `unclear` (shown as Needs human). Nairobi addendum withdraws the NCA line, so it is not counted. Live Nairobi: 0 met, 26 gaps, 10 could disqualify.
+- 2026-11-12 (step 4): Readiness is code-only. `met` only with a capability id; a service with a similar name does not count as a certificate. Company papers are capabilities with holding `have` / `dont_have` / `expired`, optional expiry, and `self_declared`. Seed: incorporation, CR12, KRA PIN, tax compliance and single business permit are Have (self-declared). AGPO, audited accounts, bank reference, NCA, ICTA, CCIE and the Communications Authority licence are Don't have. Those rows are insert-only, so a re-seed does not overwrite a status the team changed; the first status stays in `original_holding`. Forms to fill and sign are `to_prepare`, not gaps. Live: Nairobi 3 met, 13 gaps, 7 could disqualify, 10 to prepare (NCA line still excluded). Makueni 5 met, 1 gap, 1 could disqualify, 7 to prepare.
 - 2026-11-12 (step 4): The Zanari profile has no loan rate and no margin. The payment card must label 14% / 16% as the brief's example, not a company figure. Contract value defaults to KSh 8,000,000 only when the tender states none.
 - 2026-11-12 (step 4): In-document bid-security conflicts come from page text (amounts next to "tender security" / "bid bond"), not a second LLM pass. The same amount restated is not a conflict. Eligibility, mandatory requirements and technical scope are `<details>` closed by default.
 - 2026-11-12 (step 3 live): Listed models with the key. `gemini-2.5-flash` is closed to new users. `gemini-3.6-flash` accepts `additionalProperties: false` but the free tier is 20 requests/day and was used up probing. Live model is `gemini-3.5-flash-lite` (thinkingLevel `minimal`; 3.7/3.8 reject `minimal`). Gemini rejects `maxItems` on our array schema, so the 60-item cap is applied after the answer. SDK `maxRetries: 0`; one extra retry on a demand error. Link-styled buttons set `nativeButton={false}`.
 
 ## Next
-- Step 4 remaining, in order: (3) payment-risk card "Will this buyer pay on time?" using seeded county_risk (Nairobi 76.5 severe, Makueni 2.6 low) and margin.ts scenarios at 60/180/365/730; (4) rule-based recommendation in `lib/risk/recommend.ts` (LLM may rephrase reasons only) plus Approve/Override into `decisions`; (5) Vercel deploy. Do not re-extract. Supabase CLI needs `--remote`.
+- Step 4 remaining, in order: (3) payment-risk card "Will this buyer pay on time?" using seeded county_risk (Nairobi 76.5 severe, Makueni 2.6 low) and margin.ts scenarios at 60/180/365/730, inputs labelled "Your assumptions" (margin 14%, loan rate 16%, contract value from the tender or KSh 8,000,000). Never say "example" or "demo". (4) rule-based recommendation in `lib/risk/recommend.ts` (LLM may rephrase reasons only) plus Approve/Override into `decisions`; (5) Vercel deploy. Do not re-extract. Supabase CLI needs `--remote`. Migration 0004 is applied and seeded.
 - Human correction of an extracted field (keep `original_value`) is still not built. Quote check already runs in extraction.
 
 ## Known issues / open questions
 - Free-tier Gemini: `gemini-3.6-flash` is 20 requests/day (exhausted while choosing a model). Live calls use `gemini-3.5-flash-lite`. A demand spike retries once.
 - Field inserts are chunked (200) without a transaction; a mid-insert failure could leave partial fields on a failed run (runs are ~<200 fields, so one chunk in practice).
 - Scanned PDFs (e.g. Nyamira advert, 0 text): run fails with a clear "no text layer, OCR not available" message. OCR is a later step.
-- PGlite schema test applies only 0001; 0002 verified by hand in PGlite + live push. Add it to the test.
+- PGlite schema test applies 0001 and 0004. 0002 is on the live database. 0003 touches `storage.buckets`, which PGlite does not have.
 - MsingiAI Sauti endpoint, auth format and limits: get from the challenge owner.
 - Ask mentors: must both intake options (field + procurement) be shown, or is one deep enough?
 - Vercel project not linked; Vercel env vars must use the project URL with no path.
@@ -65,7 +65,8 @@
 - npm held back esbuild's postinstall (allowScripts); tsx works regardless.
 
 ## Log
-- 2026-11-12 10:20 — Step 4b: readiness on the tender page. Nairobi 0 met, 26 gaps, 10 could disqualify; NCA line excluded because the addendum removes it. No certificate is marked met.
+- 2026-11-12 10:50 — Step 4c: company documents checklist. Nairobi 3 met (self-declared), 13 gaps, 7 could disqualify, 10 to prepare. Makueni 5 met, 1 gap (bid bond), 1 could disqualify, 7 to prepare. NCA line still excluded.
+- 2026-11-12 10:20 — Step 4b: readiness on the tender page. Before company papers: Nairobi 0 met, 26 gaps, 10 could disqualify. NCA line excluded because the addendum removes it.
 - 2026-11-12 10:10 — Step 4a: "What matters" card (max 5 points) on Nairobi and Makueni. In-document bid-security conflict is code over page text (Nairobi p.7 KSh 420,000 vs p.30 KSh 500,000). Eligibility, mandatory and scope lists are closed accordions with counts.
 - 2026-11-12 08:40 — Step 3 done. Nairobi main 68 fields (57 confirmed, 3 blank, 5 inferred, 3 needs human) in ~10s; addendum 5 fields and 1 conflict (NCA req. 27, main p.31). Makueni 222 pages, 46 fields (39 confirmed, 3 blank, 3 inferred, 1 needs human) in ~14s. Five spot-checks matched. Evidence panel highlights the quote and opens the PDF at that page.
 - 2026-11-12 07:58 — Step 3a: upload, page text, extraction pipeline, tender pages. Live LLM run was blocked (no key yet).

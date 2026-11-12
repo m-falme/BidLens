@@ -1,9 +1,12 @@
+import { COMPANY_PAPERS, type DocumentHolding } from "@/lib/company/papers";
 import type { CapabilityKind } from "@/lib/db/vocab";
 
 /**
  * Match tender requirements to company capabilities. Code only.
  * A requirement is `met` only when it points at a capability in the list passed in.
  * Certificates, licences and past contracts are never marked met from a service or a tool.
+ * A paper marked Don't have or Expired is not met. Have (self-declared) is the team's mark,
+ * not a file that was checked. Forms to fill and sign are `to_prepare`, not gaps.
  */
 
 export interface ProfileCapability {
@@ -12,6 +15,12 @@ export interface ProfileCapability {
   name: string;
   detail: string | null;
   evidenceRef: string | null;
+  /** Null on services and tools. Papers use have / dont_have / expired. */
+  holding?: DocumentHolding | null;
+  /** True when Have was declared by the team, not read from a file. */
+  selfDeclared?: boolean;
+  /** ISO date. A Have whose date is before `asOf` is treated as expired. */
+  expiresOn?: string | null;
 }
 
 export interface RequirementInput {
@@ -22,7 +31,7 @@ export interface RequirementInput {
   category: "mandatory" | "technical" | "financial" | "contractual";
 }
 
-export type ReadinessMatch = "met" | "missing" | "unclear";
+export type ReadinessMatch = "met" | "missing" | "unclear" | "to_prepare";
 
 export interface MatchedRequirement {
   text: string;
@@ -34,6 +43,8 @@ export interface MatchedRequirement {
   capabilityName: string | null;
   evidenceRef: string | null;
   rationale: string;
+  /** The linked paper was marked Have by the team. The file was not checked. */
+  selfDeclared: boolean;
   /** A missing mandatory proof. Counts as "could disqualify us". */
   disqualifying: boolean;
 }
@@ -41,16 +52,30 @@ export interface MatchedRequirement {
 export interface ReadinessResult {
   items: MatchedRequirement[];
   met: number;
-  /** Missing plus needs-human. */
+  /** Missing plus needs-human. Forms to prepare are not gaps. */
   gaps: number;
+  /** Forms to fill in and sign for this bid. */
+  toPrepare: number;
   couldDisqualify: number;
-  /** met / all items, 0–100. 0 when there is nothing to match. */
+  /** met / (met + gaps), 0–100. Forms to prepare are left out. 0 when nothing is scored. */
   readinessPct: number;
 }
 
-/** Forms the bidder fills in for this tender. They are not proof the company already holds something. */
-const FILL_IN_FORM =
-  /form of tender|confidential business questionnaire|price schedule|self[ -]?declaration|code of ethics|independent tender determination|form sd\s*[12]/i;
+/**
+ * Forms and submission paperwork the bidder prepares for this tender.
+ * Not proof the company already holds a licence or a registration paper.
+ */
+const PREPARE =
+  /form of tender|confidential business questionnaire|price schedule|self[ -]?declaration|code of ethics|independent tender determination|\bsd\s*[12]\b|power of attorney|litigation history|paginated|serialized/i;
+
+/** Badge text. A self-declared match is never shown as a checked document. */
+export function readinessLabel(item: Pick<MatchedRequirement, "match" | "selfDeclared">): string {
+  if (item.match === "met" && item.selfDeclared) return "Met (self-declared)";
+  if (item.match === "met") return "Met";
+  if (item.match === "to_prepare") return "To prepare";
+  if (item.match === "missing") return "Missing";
+  return "Needs human";
+}
 
 /**
  * Something the company must already hold. A service offering is not this.
@@ -96,13 +121,26 @@ function phraseIn(haystack: string, name: string): boolean {
   return needle.length >= 8 && haystack.toLowerCase().includes(needle);
 }
 
-/** Best capability of the allowed kinds whose name is actually in the requirement. */
+/** A paper the team does not currently hold cannot satisfy a requirement. Null holding (services) can. */
+function isHeld(capability: ProfileCapability, asOf: string): boolean {
+  if (capability.holding === "dont_have" || capability.holding === "expired") return false;
+  if (capability.expiresOn && capability.expiresOn < asOf) return false;
+  return true;
+}
+
+function holdingWords(capability: ProfileCapability, asOf: string): "Expired" | "Don't have" {
+  if (capability.holding === "expired" || (capability.expiresOn && capability.expiresOn < asOf)) return "Expired";
+  return "Don't have";
+}
+
+/** Best held capability of the allowed kinds whose name is actually in the requirement. */
 function findCapability(
   text: string,
   capabilities: readonly ProfileCapability[],
   kinds: ReadonlySet<string>,
+  asOf: string,
 ): ProfileCapability | null {
-  const allowed = capabilities.filter((capability) => kinds.has(capability.kind));
+  const allowed = capabilities.filter((capability) => kinds.has(capability.kind) && isHeld(capability, asOf));
   const phrase = allowed.find((capability) => phraseIn(text, capability.name));
   if (phrase) return phrase;
 
@@ -119,7 +157,11 @@ function findCapability(
 }
 
 function met(requirement: RequirementInput, capability: ProfileCapability): MatchedRequirement {
+  const selfDeclared = capability.selfDeclared === true;
   const where = capability.evidenceRef ? ` (${capability.evidenceRef})` : "";
+  const ids = /national id|passport/i.test(requirement.text)
+    ? " This line also asks for director ID copies, which still have to be attached."
+    : "";
   return {
     text: requirement.text,
     category: requirement.category,
@@ -129,7 +171,10 @@ function met(requirement: RequirementInput, capability: ProfileCapability): Matc
     capabilityId: capability.id,
     capabilityName: capability.name,
     evidenceRef: capability.evidenceRef,
-    rationale: `Matches "${capability.name}" in the Zanari profile${where}.`,
+    selfDeclared,
+    rationale: selfDeclared
+      ? `Zanari has marked "${capability.name}" as Have (self-declared). The file has not been checked.${ids}`
+      : `Matches "${capability.name}" in the Zanari profile${where}.`,
     disqualifying: false,
   };
 }
@@ -145,6 +190,7 @@ function missing(requirement: RequirementInput, rationale: string): MatchedRequi
     capabilityName: null,
     evidenceRef: null,
     rationale,
+    selfDeclared: false,
     disqualifying: requirement.category === "mandatory",
   };
 }
@@ -159,23 +205,56 @@ function unclear(requirement: RequirementInput, rationale: string): MatchedRequi
     capabilityId: null,
     capabilityName: null,
     evidenceRef: null,
+    selfDeclared: false,
     rationale,
     disqualifying: false,
   };
 }
 
-function matchOne(requirement: RequirementInput, capabilities: readonly ProfileCapability[]): MatchedRequirement {
+function toPrepare(requirement: RequirementInput, rationale: string): MatchedRequirement {
+  return {
+    text: requirement.text,
+    category: requirement.category,
+    pageNo: requirement.pageNo,
+    quote: requirement.quote,
+    match: "to_prepare",
+    capabilityId: null,
+    capabilityName: null,
+    evidenceRef: null,
+    selfDeclared: false,
+    rationale,
+    disqualifying: false,
+  };
+}
+
+function matchOne(
+  requirement: RequirementInput,
+  capabilities: readonly ProfileCapability[],
+  asOf: string,
+): MatchedRequirement {
   const text = requirement.text;
 
-  if (FILL_IN_FORM.test(text)) {
-    return unclear(
+  if (PREPARE.test(text)) {
+    return toPrepare(
       requirement,
-      "This is a form to complete for this bid. A person has to confirm it will be attached. The profile does not prove that.",
+      "This is a form or submission paper to fill in and sign for this bid. It is to prepare, not a gap in the company papers.",
     );
   }
 
+  const paper = COMPANY_PAPERS.find((item) => item.pattern.test(text));
+  if (paper) {
+    const capability = capabilities.find((item) => item.name === paper.name);
+    if (capability && isHeld(capability, asOf)) return met(requirement, capability);
+    if (capability) {
+      return missing(
+        requirement,
+        `Zanari has marked "${capability.name}" as ${holdingWords(capability, asOf)}. It is not met.`,
+      );
+    }
+  }
+
   if (HELD_PROOF.test(text)) {
-    const capability = findCapability(text, capabilities, PROOF_KINDS);
+    const capability = findCapability(text, capabilities, PROOF_KINDS, asOf);
     if (capability) return met(requirement, capability);
     return missing(
       requirement,
@@ -184,7 +263,7 @@ function matchOne(requirement: RequirementInput, capabilities: readonly ProfileC
   }
 
   if (EXPERIENCE.test(text)) {
-    const capability = findCapability(text, capabilities, new Set(["experience"]));
+    const capability = findCapability(text, capabilities, new Set(["experience"]), asOf);
     if (capability) return met(requirement, capability);
     return missing(
       requirement,
@@ -192,7 +271,7 @@ function matchOne(requirement: RequirementInput, capabilities: readonly ProfileC
     );
   }
 
-  const service = findCapability(text, capabilities, new Set(["service", "tool", "sector"]));
+  const service = findCapability(text, capabilities, new Set(["service", "tool", "sector"]), asOf);
   if (service) return met(requirement, service);
   return unclear(requirement, "Nothing in the Zanari profile clearly covers this. A person needs to decide.");
 }
@@ -235,15 +314,17 @@ export function isWithdrawnByAddendum(requirementText: string, changes: readonly
 export function matchRequirements(
   requirements: readonly RequirementInput[],
   capabilities: readonly ProfileCapability[],
+  asOf = new Date().toISOString().slice(0, 10),
 ): ReadinessResult {
   const known = new Set(capabilities.map((capability) => capability.id));
   const items = requirements.map((requirement) => {
-    const item = matchOne(requirement, capabilities);
+    const item = matchOne(requirement, capabilities, asOf);
     if (item.match !== "met") return item;
     const capability = capabilities.find((candidate) => candidate.id === item.capabilityId);
-    const proofLine = HELD_PROOF.test(requirement.text) || EXPERIENCE.test(requirement.text);
+    const proofLine = HELD_PROOF.test(requirement.text) || EXPERIENCE.test(requirement.text) || paperLine(requirement.text);
     const wrongKind = proofLine && capability !== undefined && !PROOF_KINDS.has(capability.kind);
-    if (!capability || !known.has(capability.id) || wrongKind) {
+    const notHeld = capability !== undefined && !isHeld(capability, asOf);
+    if (!capability || !known.has(capability.id) || wrongKind || notHeld) {
       return proofLine
         ? missing(requirement, "No capability in the profile covers this. It is not marked met.")
         : unclear(requirement, "Nothing in the Zanari profile clearly covers this. A person needs to decide.");
@@ -252,12 +333,20 @@ export function matchRequirements(
   });
 
   const metCount = items.filter((item) => item.match === "met").length;
+  const toPrepare = items.filter((item) => item.match === "to_prepare").length;
+  const gaps = items.filter((item) => item.match === "missing" || item.match === "unclear").length;
   const couldDisqualify = items.filter((item) => item.disqualifying).length;
+  const scored = metCount + gaps;
   return {
     items,
     met: metCount,
-    gaps: items.length - metCount,
+    gaps,
+    toPrepare,
     couldDisqualify,
-    readinessPct: items.length === 0 ? 0 : Math.round((metCount / items.length) * 100),
+    readinessPct: scored === 0 ? 0 : Math.round((metCount / scored) * 100),
   };
+}
+
+function paperLine(text: string): boolean {
+  return COMPANY_PAPERS.some((paper) => paper.pattern.test(text));
 }

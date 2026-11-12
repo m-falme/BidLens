@@ -1,6 +1,7 @@
 import {
   FileSearch,
   FileText,
+  FolderOpen,
   Landmark,
   LayoutDashboard,
   Users,
@@ -23,6 +24,13 @@ export const NAV = {
     description: "Where every opportunity stands and what was decided.",
     icon: LayoutDashboard,
     planned: ["Pipeline counts by status", "Recent bid decisions with their snapshots"],
+  },
+  company: {
+    href: "/company",
+    title: "Company",
+    description: "Zanari's papers for tender checks, and the status the team sets for each one.",
+    icon: FolderOpen,
+    planned: [],
   },
   leads: {
     href: "/leads",

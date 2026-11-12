@@ -1,22 +1,14 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { ReadinessResult } from "@/lib/readiness/match";
+import { readinessLabel, type ReadinessMatch, type ReadinessResult } from "@/lib/readiness/match";
 import { cn } from "@/lib/utils";
 
-const MATCH_META = {
-  met: {
-    label: "Met",
-    className: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300",
-  },
-  missing: {
-    label: "Missing",
-    className: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
-  },
-  unclear: {
-    label: "Needs human",
-    className: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300",
-  },
-} as const;
+const MATCH_CLASS: Record<ReadinessMatch, string> = {
+  met: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300",
+  missing: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
+  unclear: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300",
+  to_prepare: "bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200",
+};
 
 export function ReadinessCard({
   result,
@@ -31,8 +23,9 @@ export function ReadinessCard({
       <CardHeader>
         <CardTitle className="text-xl">Can Zanari meet the mandatory requirements?</CardTitle>
         <CardDescription>
-          Matched against the Zanari profile. A line is met only when it links to a record there. Nothing was added to
-          the profile for this tender.
+          Matched against Zanari&apos;s company documents and services. A line is met only when it links to a paper
+          marked Have. Met (self-declared) is the team&apos;s own mark, not a checked file. Forms to fill in and sign
+          are to prepare, not gaps.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -44,6 +37,12 @@ export function ReadinessCard({
           <span className="font-semibold text-red-700 dark:text-red-400">
             {result.couldDisqualify} could disqualify us
           </span>
+          {result.toPrepare > 0 && (
+            <>
+              {", "}
+              <span className="font-semibold text-slate-700 dark:text-slate-300">{result.toPrepare} to prepare</span>
+            </>
+          )}
           .
         </p>
         {withdrawn.length > 0 && (
@@ -60,13 +59,13 @@ export function ReadinessCard({
               All {result.items.length} mandatory requirements
             </summary>
             <ul className="flex flex-col gap-2 px-3 pb-3">
-              {result.items.map((item) => {
-                const meta = MATCH_META[item.match];
-                return (
+              {result.items.map((item) => (
                   <li key={`${item.pageNo ?? "x"}-${item.text}`} className="rounded-lg border">
                     <details>
                       <summary className="flex cursor-pointer flex-wrap items-start gap-2 px-3 py-2">
-                        <Badge className={cn("mt-0.5 h-6 shrink-0 px-2.5", meta.className)}>{meta.label}</Badge>
+                        <Badge className={cn("mt-0.5 h-6 shrink-0 px-2.5", MATCH_CLASS[item.match])}>
+                          {readinessLabel(item)}
+                        </Badge>
                         <span className="min-w-0 flex-1">{item.text}</span>
                         <span className="shrink-0 text-muted-foreground tabular-nums">
                           {item.pageNo ? `p.${item.pageNo}` : "no page"}
@@ -88,8 +87,7 @@ export function ReadinessCard({
                       </div>
                     </details>
                   </li>
-                );
-              })}
+              ))}
             </ul>
           </details>
         )}

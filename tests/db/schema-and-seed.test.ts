@@ -55,6 +55,7 @@ async function one<T>(sql: string, params: unknown[] = []): Promise<T> {
 beforeAll(async () => {
   db = new PGlite();
   await db.exec(readFileSync("supabase/migrations/0001_init.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0004_company_documents.sql", "utf8"));
   plan = await buildSeedPlan(process.cwd());
   await runSeed(plan.steps, pgliteWriter(db));
 }, 120_000);
@@ -89,7 +90,15 @@ describe("0001_init.sql", () => {
 describe("seed", () => {
   it("loads the company, capabilities, 15 leads with evidence and 47 counties", async () => {
     expect(await count("companies")).toBe(1);
-    expect(await count("capabilities")).toBe(74);
+    expect(await count("capabilities")).toBe(74 + 12);
+    expect(
+      await one<{ have: number; missing: number; declared: number }>(
+        `select count(*) filter (where holding = 'have')::int as have,
+                count(*) filter (where holding = 'dont_have')::int as missing,
+                count(*) filter (where self_declared)::int as declared
+         from public.capabilities`,
+      ),
+    ).toEqual({ have: 5, missing: 7, declared: 5 });
     expect(
       await one<{ field: number; procurement: number }>(
         `select count(*) filter (where type = 'field')::int as field,
@@ -139,6 +148,20 @@ describe("seed", () => {
     ).toEqual({ value: "+254700000105", original_value: "0700 000 105", edited: true });
   });
 
+  it("keeps a company-document status a person changed, and the first status", async () => {
+    const id = seedId("capability", seedId("company", "Zanari Analytics"), "document", "CR12");
+    await db.query(`update public.capabilities set holding = 'expired', expires_on = '2024-01-01' where id = $1`, [id]);
+    await runSeed(plan.steps, pgliteWriter(db));
+    expect(
+      await one(`select holding, original_holding, expires_on::text as expires_on from public.capabilities where id = $1`, [
+        id,
+      ]),
+    ).toEqual({ holding: "expired", original_holding: "have", expires_on: "2024-01-01" });
+    await expect(db.query(`update public.capabilities set original_holding = 'dont_have' where id = $1`, [id])).rejects.toThrow(
+      /immutable/,
+    );
+  });
+
   it("refreshes reference data on re-run", async () => {
     await db.query(`update public.capabilities set detail = 'tampered' where name = 'Tableau'`);
     await runSeed(plan.steps, pgliteWriter(db));
@@ -186,6 +209,21 @@ describe("database guards for the product rules", () => {
       [opportunityId()],
     );
     await expect(db.query(`update public.decisions set choice = 'bid'`)).rejects.toThrow(/append-only/);
+  });
+
+  it("rejects an expiry date on a paper the team does not hold", async () => {
+    await expect(
+      db.query(`update public.capabilities set expires_on = '2026-01-01' where name = 'Tableau'`),
+    ).rejects.toThrow(/capabilities_expiry_when_held/);
+  });
+
+  it("accepts a form marked to prepare", async () => {
+    const { rows } = await db.query<{ match: string }>(
+      `insert into public.requirements (opportunity_id, text, category, match)
+       values ($1, 'Form of tender', 'mandatory', 'to_prepare') returning match`,
+      [opportunityId()],
+    );
+    expect(rows[0].match).toBe("to_prepare");
   });
 
   it("rejects a score for an unknown band and unknown statuses", async () => {

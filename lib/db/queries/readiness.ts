@@ -2,11 +2,12 @@ import "server-only";
 
 import type { MatchedRequirement, ProfileCapability } from "@/lib/readiness/match";
 
-import type { CapabilityKind } from "../vocab";
+import type { CapabilityKind, DocumentHolding } from "../vocab";
 import { getServiceClient } from "../supabase-server";
 import { getDemoCompanyId } from "./tenders";
 
 const CAPABILITY_KINDS = new Set<string>(["service", "tool", "document", "certification", "experience", "sector"]);
+const HOLDINGS = new Set<string>(["have", "dont_have", "expired"]);
 
 function fail(context: string, error: { message: string } | null): never {
   throw new Error(`${context}: ${error?.message ?? "unknown error"}`);
@@ -16,7 +17,7 @@ export async function listDemoCapabilities(): Promise<ProfileCapability[]> {
   const companyId = await getDemoCompanyId();
   const { data, error } = await getServiceClient()
     .from("capabilities")
-    .select("id, kind, name, detail, evidence_ref")
+    .select("id, kind, name, detail, evidence_ref, holding, self_declared, expires_on")
     .eq("company_id", companyId);
   if (error) fail("load capabilities", error);
   return data.flatMap((row) => {
@@ -28,6 +29,9 @@ export async function listDemoCapabilities(): Promise<ProfileCapability[]> {
         name: row.name,
         detail: row.detail,
         evidenceRef: row.evidence_ref,
+        holding: row.holding && HOLDINGS.has(row.holding) ? (row.holding as DocumentHolding) : null,
+        selfDeclared: row.self_declared,
+        expiresOn: row.expires_on,
       },
     ];
   });

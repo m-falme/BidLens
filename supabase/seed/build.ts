@@ -24,6 +24,8 @@ import {
   ZANARI_WORKBOOK_FILE,
   type WorkbookRow,
 } from "./workbook";
+import { COMPANY_PAPERS } from "@/lib/company/papers";
+
 import { ZANARI_PROFILE_FILE, zanariCapabilities, zanariCompany } from "./zanari-profile";
 
 const WORKBOOK_PATH = path.join("data", "zanari", ZANARI_WORKBOOK_FILE);
@@ -103,7 +105,7 @@ export async function buildSeedPlan(rootDir: string): Promise<SeedPlan> {
     profile_json: zanariCompany.profile,
   };
 
-  const capabilities = zanariCapabilities.map(
+  const profileCapabilities = zanariCapabilities.map(
     (c): CapabilityRow => ({
       id: seedId("capability", company.id, c.kind, c.name),
       company_id: company.id,
@@ -112,6 +114,29 @@ export async function buildSeedPlan(rootDir: string): Promise<SeedPlan> {
       detail: c.detail,
       evidence_ref: `${ZANARI_PROFILE_FILE} p.${c.page}`,
       verified: true,
+      holding: null,
+      expires_on: null,
+      self_declared: false,
+      original_holding: null,
+    }),
+  );
+
+  // Insert-only: a person can change Have / Don't have / Expired, and a re-seed must not put it back.
+  const documentCapabilities = COMPANY_PAPERS.map(
+    (paper): CapabilityRow => ({
+      id: seedId("capability", company.id, paper.kind, paper.name),
+      company_id: company.id,
+      kind: paper.kind,
+      name: paper.name,
+      detail: paper.selfDeclared
+        ? "The team marked this Have. The file has not been checked."
+        : "Marked Don't have. The company profile does not include it.",
+      evidence_ref: paper.selfDeclared ? "Company documents checklist, self-declared" : "Company documents checklist",
+      verified: false,
+      holding: paper.seedHolding,
+      expires_on: null,
+      self_declared: paper.selfDeclared,
+      original_holding: null,
     }),
   );
 
@@ -203,7 +228,8 @@ export async function buildSeedPlan(rootDir: string): Promise<SeedPlan> {
     countyRisk,
     steps: [
       { table: "companies", mode: "refresh", rows: [company] },
-      { table: "capabilities", mode: "refresh", rows: capabilities },
+      { table: "capabilities", mode: "refresh", rows: profileCapabilities },
+      { table: "capabilities", mode: "insert_only", rows: documentCapabilities },
       { table: "opportunities", mode: "insert_only", rows: leads.map((l) => l.opportunity) },
       { table: "sources", mode: "insert_only", rows: leads.map((l) => l.source) },
       { table: "source_pages", mode: "insert_only", rows: leads.map((l) => l.page) },

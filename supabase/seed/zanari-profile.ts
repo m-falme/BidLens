@@ -3,8 +3,9 @@ import type { CapabilityKind } from "./rows";
 /**
  * Hand transcription of data/zanari/zanari_company_profile.pdf (15 pages), verbatim where
  * quoted. The profile lists no certifications, registration documents, named clients or
- * case studies (p.14 "Our Clients" is logos only), so none are seeded: readiness must show
- * those requirements as missing until a human adds evidence.
+ * case studies (p.14 "Our Clients" is logos only). Company papers are a separate checklist
+ * in lib/company/papers.ts: general registration is Have (self-declared), industry licences
+ * are Don't have. This file stays a transcription of the profile only.
  */
 
 export const ZANARI_PROFILE_FILE = "zanari_company_profile.pdf";

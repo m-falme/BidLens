@@ -79,7 +79,7 @@ Priority: **P0** = must work at the 14:00 gate · **P1** = must work for the fin
 | Developer pack and sample workbook | Challenge pack (DOCX, XLSX) | 10 field leads, 5 synthetic tenders, 3 notebook notes, questionnaire, status glossary | Provided (synthetic) |
 | Real tender PDFs (Nairobi SD-WAN + addendum, Makueni CRMIS, Nyamira revenue) | tenders.go.ke | Hero demo; real blanks and conflicts | Downloaded |
 | County pending bills, 47 counties (Jun 2025, Jun 2026) | Controller of Budget BIRR reports | Buyer risk score and dashboard | Extracted to CSV |
-| County risk scores | Our calc from CoB | Risk card | CSV (formula in ARCHITECTURE §6) |
+| County risk scores | Our calc from CoB | Risk card | CSV (formula in ARCHITECTURE §5.3) |
 | PPIP ICT awards 2024–26 | tenders.go.ke OCDS | Context: who wins what (optional) | CSV |
 | CBK lending rate | CBK | Default loan rate (user can override) | Look up and cite on the day |
 

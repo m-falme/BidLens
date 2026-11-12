@@ -8,8 +8,8 @@ import type { CountyPendingBillsRow } from "./rows";
 
 /** Controller of Budget reports page; the CSVs cite table numbers in the `source` column. */
 export const COB_SOURCE_URL = "https://cob.go.ke/reports/";
-/** Date the CoB figures were retrieved. Unknown until confirmed: kept null rather than guessed. */
-export const COB_RETRIEVED_AT: string | null = null;
+/** Date the CoB reports were retrieved. The figures themselves are as at each row's report_date. */
+export const COB_RETRIEVED_AT = "2026-11-11";
 
 export const COB_2026_FILE = "data/county_pending_bills_cob_47_jun2026.csv";
 export const COB_2025_FILE = "data/county_pending_bills_cob_47_jun2025.csv";

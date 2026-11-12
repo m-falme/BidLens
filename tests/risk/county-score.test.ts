@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   bandForScore,
   formatReportDate,
+  PARTS_ROUNDED_NOTE,
   scoreCounty,
   trendPart,
   type CountyScoreInput,
@@ -26,11 +27,24 @@ describe("scoreCounty: §5.3 expected values", () => {
       score: 76.5,
       band: "severe",
       confidence: "high",
-      partA: 36.5,
+      partA: 36,
       partB: 30,
       partC: 10,
       reason: null,
     });
+  });
+
+  it("rounds the total once from exact parts and shows the parts as whole numbers", () => {
+    // Nairobi: A = 0.5 × 72.9 = 36.45 exactly, so the parts sum to 76 while the score is 76.5.
+    const nairobi = score("Nairobi");
+    expect(nairobi.score).toBe(76.5);
+    expect(nairobi.partA! + nairobi.partB! + nairobi.partC!).toBe(76);
+    for (const s of scores.values()) {
+      for (const part of [s.partA, s.partB, s.partC]) {
+        if (part !== null) expect(Number.isInteger(part)).toBe(true);
+      }
+    }
+    expect(PARTS_ROUNDED_NOTE).toMatch(/rounded/);
   });
 
   it("Mombasa is 64.3 High", () => {
@@ -78,19 +92,19 @@ describe("scoreCounty: cross-check against data/county_payment_risk_scores_demo.
     }
   });
 
-  it("matches every score and part within 0.1; the differences are rounding, listed here", () => {
+  it("matches every score within 0.1 and every whole-number part within 1; score differences are listed here", () => {
     const differing: string[] = [];
     for (const d of demo) {
       const s = score(d.county);
-      const pairs: [number | null, number | null][] = [
-        [s.score, num(d.score)],
-        [s.partA, num(d.A_ageing)],
-        [s.partB, num(d.B_size)],
-        [s.partC, num(d.C_trend)],
+      const pairs: [number | null, number | null, number][] = [
+        [s.score, num(d.score), 0.1 + 1e-9],
+        [s.partA, num(d.A_ageing), 1 - 1e-9],
+        [s.partB, num(d.B_size), 1 - 1e-9],
+        [s.partC, num(d.C_trend), 0],
       ];
-      for (const [ours, theirs] of pairs) {
+      for (const [ours, theirs, tolerance] of pairs) {
         expect(ours === null).toBe(theirs === null);
-        if (ours !== null && theirs !== null) expect(Math.abs(ours - theirs)).toBeLessThanOrEqual(0.1 + 1e-9);
+        if (ours !== null && theirs !== null) expect(Math.abs(ours - theirs)).toBeLessThanOrEqual(tolerance);
       }
       if (s.score !== num(d.score)) differing.push(d.county);
     }

@@ -33,10 +33,15 @@ yarn-error.log*
 
 # env files: secrets never committed; the template is
 .env*
+.env*.local
 !.env.example
 
 # vercel
 .vercel
+
+# supabase CLI link state (project ref, pooler URL); local only
+supabase/.temp/
+supabase/.branches/
 
 # typescript
 *.tsbuildinfo

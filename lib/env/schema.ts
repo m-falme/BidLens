@@ -12,8 +12,14 @@ const optional = () => z.preprocess(blankToUndefined, z.string().optional());
 export const publicEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.preprocess(
     blankToUndefined,
-    z.url({ message: "must be a URL, e.g. https://xyz.supabase.co" }),
+    z
+      .url({ message: "must be a URL, e.g. https://xyz.supabase.co" })
+      // supabase-js appends /rest/v1 itself; a pasted API endpoint would double it.
+      .refine((value) => !URL.canParse(value) || new URL(value).pathname === "/", {
+        message: "must be the project URL with no path, e.g. https://xyz.supabase.co (not …/rest/v1)",
+      }),
   ),
+  // Publishable (sb_publishable_…) or legacy anon key; opaque, the shape is not checked.
   NEXT_PUBLIC_SUPABASE_ANON_KEY: required(),
 });
 

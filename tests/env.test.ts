@@ -74,6 +74,37 @@ describe("parseEnv", () => {
     expect(error.message).not.toContain("llm-secret");
   });
 
+  it("rejects a Supabase URL with a path, such as the REST endpoint", () => {
+    const error = captureError(() =>
+      parseEnv(
+        serverEnvSchema,
+        { ...validServerEnv, NEXT_PUBLIC_SUPABASE_URL: "https://demo.supabase.co/rest/v1/" },
+        "server",
+      ),
+    );
+
+    expect(error.problems).toEqual([
+      "NEXT_PUBLIC_SUPABASE_URL: must be the project URL with no path, e.g. https://xyz.supabase.co (not …/rest/v1)",
+    ]);
+    expect(parseEnv(serverEnvSchema, { ...validServerEnv, NEXT_PUBLIC_SUPABASE_URL: "https://demo.supabase.co/" }, "server"))
+      .toMatchObject({ NEXT_PUBLIC_SUPABASE_URL: "https://demo.supabase.co/" });
+  });
+
+  it("accepts the new opaque publishable and secret key formats", () => {
+    const env = parseEnv(
+      serverEnvSchema,
+      {
+        ...validServerEnv,
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_test",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test",
+      },
+      "server",
+    );
+
+    expect(env.NEXT_PUBLIC_SUPABASE_ANON_KEY).toBe("sb_publishable_test");
+    expect(env.SUPABASE_SERVICE_ROLE_KEY).toBe("sb_secret_test");
+  });
+
   it("validates only public keys for the public scope", () => {
     const env = parseEnv(
       publicEnvSchema,

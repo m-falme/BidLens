@@ -35,10 +35,11 @@ export interface CountyScoreInput {
 export interface CountyScore {
   county: string;
   asOf: string;
-  /** null when there is not enough data: show "no score", never 0. */
+  /** Exact A + B + C rounded once to 1 dp. null when there is not enough data: show "no score", never 0. */
   score: number | null;
   band: RiskBand;
   confidence: RiskConfidence;
+  /** Parts are whole numbers for display, so they may not sum to `score`: show PARTS_ROUNDED_NOTE. */
   partA: number | null;
   partB: number | null;
   partC: number | null;
@@ -50,6 +51,10 @@ export const AGEING_WEIGHT = 0.5;
 export const SIZE_WEIGHT = 0.75;
 export const SIZE_CAP = 30;
 export const TREND_THRESHOLD_PCT = 10;
+
+/** Shown next to the parts wherever they are displayed. */
+export const PARTS_ROUNDED_NOTE =
+  "Parts rounded to whole numbers; the total is computed from the exact parts and rounded once.";
 
 /** A. Ageing (≤50): 0.5 × % of bills older than 2 years. */
 export function ageingPart(pctOver2y: number): number {
@@ -131,8 +136,8 @@ export function scoreCounty(input: CountyScoreInput): CountyScore {
     score,
     band: bandForScore(score),
     confidence: caveats.length > 0 ? "medium" : "high",
-    partA: roundTo(a, 1),
-    partB: roundTo(b, 1),
+    partA: roundTo(a, 0),
+    partB: roundTo(b, 0),
     partC: c,
     reason: caveats.length > 0 ? caveats.join("; ") : null,
   };

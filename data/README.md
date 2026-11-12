@@ -2,8 +2,8 @@
 
 | File | What | Source / status |
 |---|---|---|
-| county_pending_bills_cob_47_jun2026.csv | 47 counties, trade payables at 30 Jun 2026: total, exec/assembly split, FY25/26 budget, % of budget, executive ageing buckets, % over 3y / over 2y, OSR reported, payables as % of OSR, data_status (OK / FLAGGED / NOT_DISCLOSED), YoY change | PRIMARY: CoB County BIRR FY2025/26 (Aug 2026) Tables 2.1, 2.10, 2.11. Parsed by script; totals reconcile to KSh 172,526.69m |
-| county_pending_bills_cob_47_jun2025.csv | Same for 30 Jun 2025 (FY2024/25 report Tables 2.9/2.10) with data-quality flags, plus Jun-2026 totals and Mar-2026 narrative % | PRIMARY for Jun 2025; reconciles to 183,028.75m total and 85,420.04m over-3y |
+| county_pending_bills_cob_47_jun2026.csv | 47 counties, trade payables at 30 Jun 2026: total, exec/assembly split, FY25/26 budget, % of budget, executive ageing buckets, % over 3y / over 2y, OSR reported, payables as % of OSR, data_status (OK / FLAGGED / NOT_DISCLOSED), YoY change | PRIMARY: CoB County BIRR FY2025/26 (Aug 2026) Tables 2.1, 2.10, 2.11. Parsed by script; totals reconcile to KSh 172,526.69m. Figures as at 30 Jun 2026, retrieved 11 Nov 2026 |
+| county_pending_bills_cob_47_jun2025.csv | Same for 30 Jun 2025 (FY2024/25 report Tables 2.9/2.10) with data-quality flags, plus Jun-2026 totals and Mar-2026 narrative % | PRIMARY for Jun 2025; reconciles to 183,028.75m total and 85,420.04m over-3y. Retrieved 11 Nov 2026 |
 | county_payment_risk_scores_demo.csv | Demo scores using the formula in research.md section 3 | Our own arithmetic. NOT validated against payment outcomes |
 | tenders/ | 3 real open ICT tenders (5 documents + addendum) | Downloaded from tenders.go.ke/storage on 11 Nov 2026 |
 | tenders_demo.json | Metadata and demo role for each tender | |

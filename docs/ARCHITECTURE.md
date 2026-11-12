@@ -103,6 +103,7 @@ Requirements + capabilities → LLM proposes a match per requirement with `capab
   - **A. Ageing (≤50):** `0.5 × pct_over_2y`
   - **B. Size (≤30):** `min(30, 0.75 × pending_as_pct_of_budget)`
   - **C. Trend (≤20):** `0` if payables fell ≥10% YoY; `10` if within ±10%; `20` if rose ≥10%
+  - Rounding: score = `round1(A + B + C)` on the exact parts, rounded once. Parts are shown as whole numbers with a "parts rounded" note (they may not sum to the score).
   - Bands: `<25 Low · 25–49 Moderate · 50–74 High · ≥75 Severe`. Confidence: `HIGH` (clean CoB data), `MEDIUM` (CoB flag / anomalies), `UNKNOWN` (no data → no score shown, not 0).
   - Expected: Nairobi 76.5 Severe (HIGH); Mombasa 64.3 High; Makueni 2.6 Low (MEDIUM). Unit-test these.
 - `margin.ts` (inputs V, m, r, D, adv, f=1, s=0, ir=0):

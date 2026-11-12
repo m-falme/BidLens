@@ -23,6 +23,8 @@
 
 # misc
 .DS_Store
+# Office lock files (a workbook open in Excel)
+~$*
 *.pem
 
 # debug

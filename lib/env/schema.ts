@@ -38,8 +38,16 @@ export const serverEnvSchema = publicEnvSchema.extend({
   SAUTI_API_KEY: optional(),
 });
 
+/** What reading and writing the database needs; pages that only show data must not depend on the LLM key. */
+export const databaseEnvSchema = serverEnvSchema.pick({
+  NEXT_PUBLIC_SUPABASE_URL: true,
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: true,
+  SUPABASE_SERVICE_ROLE_KEY: true,
+});
+
 export type PublicEnv = z.infer<typeof publicEnvSchema>;
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
+export type DatabaseEnv = z.infer<typeof databaseEnvSchema>;
 export type EnvScope = "public" | "server";
 
 export class EnvValidationError extends Error {

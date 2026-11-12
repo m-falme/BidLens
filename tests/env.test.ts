@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  databaseEnvSchema,
   EnvValidationError,
   parseEnv,
   publicEnvSchema,
@@ -32,6 +33,17 @@ describe("parseEnv", () => {
 
     expect(env.LLM_PROVIDER).toBe("openai");
     expect(env.SAUTI_API_URL).toBeUndefined();
+  });
+
+  it("lets the database config validate without the LLM variables", () => {
+    const { LLM_MODEL: _model, LLM_API_KEY: _key, ...withoutLlm } = validServerEnv;
+    void _model;
+    void _key;
+    expect(parseEnv(databaseEnvSchema, withoutLlm, "server").SUPABASE_SERVICE_ROLE_KEY).toBe("service-role-secret");
+    expect(captureError(() => parseEnv(serverEnvSchema, withoutLlm, "server")).problems).toEqual([
+      "LLM_MODEL: missing",
+      "LLM_API_KEY: missing",
+    ]);
   });
 
   it("defaults LLM_PROVIDER to google when unset or blank", () => {

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Suspense } from "react";
 import { Building2 } from "lucide-react";
 
 import {
@@ -19,9 +20,35 @@ import { DEMO_COMPANY_NAME } from "@/lib/app-config";
 
 import { NAV_ITEMS, isNavItemActive } from "./nav";
 
-export function AppSidebar() {
-  const pathname = usePathname();
+function NavMenu({ pathname }: { pathname: string | null }) {
+  return (
+    <SidebarMenu>
+      {NAV_ITEMS.map((item) => {
+        const active = pathname !== null && isNavItemActive(pathname, item.href);
+        return (
+          <SidebarMenuItem key={item.href}>
+            <SidebarMenuButton
+              isActive={active}
+              tooltip={item.title}
+              aria-current={active ? "page" : undefined}
+              render={<Link href={item.href} />}
+            >
+              <item.icon aria-hidden />
+              <span>{item.title}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        );
+      })}
+    </SidebarMenu>
+  );
+}
 
+/** On dynamic routes the pathname is request-time data, so the highlight streams in after the shell. */
+function ActiveNavMenu() {
+  return <NavMenu pathname={usePathname()} />;
+}
+
+export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
@@ -38,24 +65,9 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {NAV_ITEMS.map((item) => {
-                const active = isNavItemActive(pathname, item.href);
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      isActive={active}
-                      tooltip={item.title}
-                      aria-current={active ? "page" : undefined}
-                      render={<Link href={item.href} />}
-                    >
-                      <item.icon aria-hidden />
-                      <span>{item.title}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
+            <Suspense fallback={<NavMenu pathname={null} />}>
+              <ActiveNavMenu />
+            </Suspense>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

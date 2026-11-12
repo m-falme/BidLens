@@ -1,16 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ExternalLink, GitCompareArrows } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 
-import { EvidenceChip, StatusBadge } from "@/components/evidence/status-badge";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusBadge } from "@/components/evidence/status-badge";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { FieldStatus, SourceRole } from "@/lib/db/vocab";
 import type { AddendumConflict } from "@/lib/tenders/addendum-conflicts";
-import { fieldLabel, LIST_FIELD_KEYS, SCALAR_FIELD_KEYS } from "@/lib/tenders/field-catalog";
+import type { BidSecurityConflict } from "@/lib/tenders/document-conflicts";
+import { fieldLabel } from "@/lib/tenders/field-catalog";
 import type { MatterPoint } from "@/lib/tenders/what-matters";
 import { decideFieldStatus, STATUS_REASON_TEXT } from "@/lib/verify/field-status";
 import { findQuoteSpan } from "@/lib/verify/quote-check";
@@ -37,16 +35,6 @@ export interface ViewSource {
   fileUrl: string | null;
 }
 
-const LIST_TITLES: Record<string, string> = {
-  eligibility: "Eligibility",
-  mandatory_requirement: "Mandatory requirements",
-  technical_scope: "Technical scope",
-  evaluation_criterion: "Evaluation criteria",
-  addendum_change: "Changes made by the addendum",
-};
-
-/** Evidence stays closed until someone asks for it. The count stays visible. */
-
 function ValueText({ field }: { field: ViewField }) {
   if (field.value !== null) return <span className="whitespace-pre-line">{field.value}</span>;
   if (field.status === "blank_in_source") return <span className="text-muted-foreground italic">Left blank in the tender</span>;
@@ -54,115 +42,21 @@ function ValueText({ field }: { field: ViewField }) {
   return <span className="text-muted-foreground italic">Not found in the pages searched</span>;
 }
 
-function FieldTable({ fields, showKey, onOpen }: { fields: ViewField[]; showKey: boolean; onOpen: (f: ViewField) => void }) {
+function ConflictPill() {
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          {showKey ? <TableHead className="w-56">Field</TableHead> : <TableHead className="w-12">#</TableHead>}
-          <TableHead>Value</TableHead>
-          <TableHead className="w-40">Status</TableHead>
-          <TableHead className="w-28 text-right">Confidence</TableHead>
-          <TableHead className="w-20 text-right">Page</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {fields.map((f) => (
-          <TableRow
-            key={f.id}
-            tabIndex={0}
-            role="button"
-            aria-label={`Show evidence for ${fieldLabel(f.key)}`}
-            onClick={() => onOpen(f)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onOpen(f);
-              }
-            }}
-            className="cursor-pointer align-top focus-visible:bg-muted focus-visible:outline-none"
-          >
-            <TableCell className="font-medium whitespace-normal">
-              {showKey ? fieldLabel(f.key) : f.ordinal + 1}
-            </TableCell>
-            <TableCell className="max-w-xl whitespace-normal break-words">
-              <ValueText field={f} />
-              {f.affects_key && (
-                <span className="mt-1 block text-sm text-muted-foreground">Affects: {fieldLabel(f.affects_key)}</span>
-              )}
-            </TableCell>
-            <TableCell>
-              <StatusBadge status={f.status} />
-            </TableCell>
-            <TableCell className="text-right tabular-nums">{Math.round(f.confidence * 100)}%</TableCell>
-            <TableCell className="text-right tabular-nums">{f.page_no ? `p.${f.page_no}` : "—"}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <span className="inline-flex rounded-full bg-warning/15 px-2.5 py-0.5 text-sm font-medium tracking-wide text-warning uppercase">
+      Conflict found
+    </span>
   );
 }
 
-function FieldsForSource({ fields, onOpen }: { fields: ViewField[]; onOpen: (f: ViewField) => void }) {
-  const scalar = SCALAR_FIELD_KEYS.flatMap((k) => fields.filter((f) => f.key === k));
-  const lists = LIST_FIELD_KEYS.map((k) => [k, fields.filter((f) => f.key === k)] as const).filter(([, l]) => l.length > 0);
+function PageLink({ pageNo, onClick }: { pageNo: number | null; onClick: () => void }) {
   return (
-    <div className="flex flex-col gap-4">
-      {scalar.length > 0 && (
-        <details className="rounded-lg border">
-          <summary className="cursor-pointer px-4 py-3 text-lg font-semibold">
-            Key facts <span className="font-normal text-muted-foreground">({scalar.length})</span>
-          </summary>
-          <div className="overflow-x-auto px-2 pb-3">
-            <FieldTable fields={scalar} showKey onOpen={onOpen} />
-          </div>
-        </details>
-      )}
-      {lists.map(([key, list]) => (
-        <details key={key} className="rounded-lg border">
-          <summary className="cursor-pointer px-4 py-3 text-lg font-semibold">
-            {LIST_TITLES[key]} <span className="font-normal text-muted-foreground">({list.length})</span>
-          </summary>
-          <div className="overflow-x-auto px-2 pb-3">
-            <FieldTable fields={list} showKey={false} onOpen={onOpen} />
-          </div>
-        </details>
-      ))}
-    </div>
+    <button type="button" onClick={onClick} className="font-medium text-brand not-italic hover:underline">
+      {pageNo ? `Page ${pageNo}` : "No page"} ↗
+    </button>
   );
 }
-
-function ConflictSide({
-  title,
-  field,
-  onOpen,
-}: {
-  title: string;
-  field: ViewField | undefined;
-  onOpen: (f: ViewField) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-2 rounded-lg border p-3">
-      <span className="text-sm font-medium text-muted-foreground">{title}</span>
-      {field ? (
-        <>
-          <span className="whitespace-pre-line">{field.value ?? <ValueText field={field} />}</span>
-          <span>
-            <EvidenceChip status={field.status} page={field.page_no} onClick={() => onOpen(field)} />
-          </span>
-        </>
-      ) : (
-        <span className="text-muted-foreground italic">No matching value found in the main document. Compare by hand.</span>
-      )}
-    </div>
-  );
-}
-
-const CONFLICT_TITLE: Record<AddendumConflict["kind"], string> = {
-  value_differs: "Values differ",
-  addendum_only: "Only the addendum states this",
-  addendum_change: "Changed by the addendum",
-};
 
 function EvidencePanel({
   field,
@@ -256,47 +150,30 @@ function EvidencePanel({
   );
 }
 
-function WhatMattersCard({
-  points,
-  fields,
+function QuoteLine({
+  quote,
+  pageNo,
   onOpen,
 }: {
-  points: MatterPoint[];
-  fields: Map<string, ViewField>;
-  onOpen: (field: ViewField) => void;
+  quote: string | null;
+  pageNo: number | null;
+  onOpen: () => void;
 }) {
-  if (points.length === 0) return null;
+  if (!quote && pageNo === null) return null;
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-xl">What matters</CardTitle>
-        <CardDescription>The facts that change a bid. Each chip opens the quote it comes from.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ol className="flex list-none flex-col gap-3">
-          {points.map((point, index) => (
-            <li key={point.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1.5">
-              <span className="font-semibold text-muted-foreground tabular-nums">{index + 1}.</span>
-              <span>{point.text}</span>
-              {point.fieldIds.map((id) => {
-                const field = fields.get(id);
-                if (!field) return null;
-                return (
-                  <EvidenceChip
-                    key={id}
-                    status={field.status}
-                    page={field.page_no}
-                    onClick={() => onOpen(field)}
-                  />
-                );
-              })}
-            </li>
-          ))}
-        </ol>
-      </CardContent>
-    </Card>
+    <p className="mt-2 text-muted-foreground">
+      {quote && <em>“{quote}”</em>}
+      {quote && " "}
+      <PageLink pageNo={pageNo} onClick={onOpen} />
+    </p>
   );
 }
+
+const CONFLICT_NOTE: Record<AddendumConflict["kind"], string> = {
+  value_differs: "The addendum and the main tender state different values. Both are kept.",
+  addendum_only: "Only the addendum states this. Nothing was merged.",
+  addendum_change: "The addendum changes this. Both quotes stay until a person decides.",
+};
 
 export function FieldsView({
   fields,
@@ -304,6 +181,7 @@ export function FieldsView({
   conflicts,
   pageTexts,
   matters,
+  securityConflict,
 }: {
   fields: ViewField[];
   sources: ViewSource[];
@@ -311,62 +189,123 @@ export function FieldsView({
   /** `${source_id}:${page_no}` → page text, for every cited page. */
   pageTexts: Record<string, string>;
   matters: MatterPoint[];
+  securityConflict: BidSecurityConflict | null;
 }) {
   const [open, setOpen] = useState<ViewField | null>(null);
-  const byId = new Map(fields.map((f) => [f.id, f]));
-  const sourceById = new Map(sources.map((s) => [s.id, s]));
+  const byId = new Map(fields.map((field) => [field.id, field]));
+  const sourceById = new Map(sources.map((source) => [source.id, source]));
 
   return (
-    <div className="flex flex-col gap-8">
-      <WhatMattersCard points={matters} fields={byId} onOpen={setOpen} />
-      {conflicts.length > 0 && (
-        <Card className="border-amber-300 dark:border-amber-800">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <GitCompareArrows className="size-5 text-amber-600" aria-hidden />
-              Addendum conflicts ({conflicts.length})
-            </CardTitle>
-            <CardDescription>
-              The addendum differs from the main tender here. Both values are kept; nothing was merged. A person decides
-              which applies.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {conflicts.map((c) => (
-              <div key={`${c.kind}-${c.addendum.id}`} className="flex flex-col gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold">{fieldLabel(c.key)}</span>
-                  <Badge variant="outline">{CONFLICT_TITLE[c.kind]}</Badge>
-                  <Badge className="bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300">Needs a human decision</Badge>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <ConflictSide title="Main tender says" field={c.main ? byId.get(c.main.id) : undefined} onOpen={setOpen} />
-                  <ConflictSide title="Addendum says" field={byId.get(c.addendum.id)} onOpen={setOpen} />
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+    <div>
+      {matters.length === 0 && fields.length === 0 && !securityConflict && conflicts.length === 0 ? (
+        <p className="px-5 py-4 text-muted-foreground">No key facts were extracted from this tender yet.</p>
+      ) : (
+        <>
+          {matters.map((point) => (
+            <article key={point.id} className="border-b border-border px-5 py-4">
+              <p>{point.text}</p>
+              {point.fieldIds.length > 0 && (
+                <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                  {point.fieldIds.map((id) => {
+                    const field = byId.get(id);
+                    if (!field) return null;
+                    return (
+                      <span key={id} className="inline-flex items-center gap-2">
+                        <StatusBadge status={field.status} />
+                        <PageLink pageNo={field.page_no} onClick={() => setOpen(field)} />
+                      </span>
+                    );
+                  })}
+                </p>
+              )}
+            </article>
+          ))}
 
-      {sources.map((source) => {
-        const own = fields.filter((f) => f.source_id === source.id);
-        if (own.length === 0) return null;
-        return (
-          <Card key={source.id}>
-            <CardHeader>
-              <CardTitle className="text-xl">
-                {source.role === "addendum" ? "Addendum" : "Extracted fields"}
-                <span className="ml-2 text-base font-normal text-muted-foreground">{source.name}</span>
-              </CardTitle>
-              <CardDescription>Click any row to see its quote and the page it comes from.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <FieldsForSource fields={own} onOpen={setOpen} />
-            </CardContent>
-          </Card>
-        );
-      })}
+          {securityConflict && (
+            <article className="border-b border-border px-5 py-4">
+              <div className="flex flex-wrap items-center gap-2 font-semibold">
+                Bid security <ConflictPill />
+              </div>
+              <p className="mt-1">
+                Two amounts appear in this tender. They are kept separate until a reviewer confirms which governs.
+              </p>
+              {securityConflict.amounts.map((amount) => {
+                const field = fields.find((item) => item.page_no === amount.pageNo);
+                const fileUrl = sources.find((source) => source.role === "main")?.fileUrl;
+                return (
+                  <p key={`${amount.pageNo}-${amount.amountKes}`} className="mt-2 text-muted-foreground">
+                    <em>“{amount.quote}”</em>{" "}
+                    {field ? (
+                      <PageLink pageNo={amount.pageNo} onClick={() => setOpen(field)} />
+                    ) : fileUrl ? (
+                      <a
+                        href={`${fileUrl}#page=${amount.pageNo}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-medium text-brand not-italic hover:underline"
+                      >
+                        Page {amount.pageNo} ↗
+                      </a>
+                    ) : (
+                      <span>Page {amount.pageNo}</span>
+                    )}
+                  </p>
+                );
+              })}
+            </article>
+          )}
+
+          {conflicts.map((conflict) => {
+            const addendum = byId.get(conflict.addendum.id);
+            const main = conflict.main ? byId.get(conflict.main.id) : undefined;
+            return (
+              <article key={`${conflict.kind}-${conflict.addendum.id}`} className="border-b border-border px-5 py-4">
+                <div className="flex flex-wrap items-center gap-2 font-semibold">
+                  {fieldLabel(conflict.key)} <ConflictPill />
+                </div>
+                <p className="mt-1">{CONFLICT_NOTE[conflict.kind]}</p>
+                <p className="mt-2 text-sm text-muted-foreground">Main tender</p>
+                {main ? (
+                  <QuoteLine quote={main.quote ?? main.value} pageNo={main.page_no} onOpen={() => setOpen(main)} />
+                ) : (
+                  <p className="mt-1 text-muted-foreground italic">
+                    No matching value found in the main document. Compare by hand.
+                  </p>
+                )}
+                <p className="mt-2 text-sm text-muted-foreground">Addendum</p>
+                {addendum ? (
+                  <QuoteLine
+                    quote={addendum.quote ?? addendum.value}
+                    pageNo={addendum.page_no}
+                    onOpen={() => setOpen(addendum)}
+                  />
+                ) : (
+                  <p className="mt-1 text-muted-foreground italic">Addendum value is not on a cited page.</p>
+                )}
+              </article>
+            );
+          })}
+
+          {fields.map((field) => (
+            <article key={field.id} className="flex flex-wrap items-start justify-between gap-4 border-b border-border px-5 py-4 last:border-b-0">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2 font-semibold">
+                  {fieldLabel(field.key)}
+                  <StatusBadge status={field.status} />
+                </div>
+                <p className="mt-1">
+                  <ValueText field={field} />
+                </p>
+                {field.affects_key && (
+                  <p className="mt-1 text-muted-foreground">Affects: {fieldLabel(field.affects_key)}</p>
+                )}
+                <QuoteLine quote={field.quote} pageNo={field.page_no} onOpen={() => setOpen(field)} />
+              </div>
+              <p className="text-sm text-muted-foreground tabular-nums">{Math.round(field.confidence * 100)}%</p>
+            </article>
+          ))}
+        </>
+      )}
 
       <EvidencePanel
         field={open}

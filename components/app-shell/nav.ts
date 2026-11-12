@@ -76,13 +76,6 @@ export const NAV = {
     icon: Landmark,
     planned: [],
   },
-  proposals: {
-    href: "/proposals",
-    title: "Proposals",
-    description: "Proposal drafts built only from approved inputs.",
-    icon: FileSearch,
-    planned: [],
-  },
 } as const satisfies Record<string, NavItem>;
 
 /** Counties stays a working page. It is linked from a tender, not listed in the sidebar. */
@@ -103,6 +96,5 @@ export function shellCrumb(pathname: string): { group: "Workspace" | "Manage"; p
   if (pathname.startsWith("/evidence")) return { group: "Workspace", page: NAV.evidence.title };
   if (pathname.startsWith("/leads")) return { group: "Workspace", page: NAV.leads.title };
   if (pathname.startsWith("/counties")) return { group: "Workspace", page: NAV.counties.title };
-  if (pathname.startsWith("/proposals")) return { group: "Workspace", page: NAV.proposals.title };
   return { group: "Workspace", page: NAV.overview.title };
 }

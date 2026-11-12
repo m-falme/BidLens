@@ -3,15 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { FilePlus2, ShieldAlert } from "lucide-react";
 import { z } from "zod";
 
-import { NAV } from "@/components/app-shell/nav";
-import { PageNav } from "@/components/app-shell/page-nav";
 import { STATUS_META } from "@/components/evidence/status-badge";
 import { RiskBadge } from "@/components/tenders/markers";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getWorkspaceName } from "@/lib/db/queries/company";
 import { listActionItems } from "@/lib/db/queries/action-items";
 import { listBidDecisions } from "@/lib/db/queries/bid-decisions";
@@ -34,30 +30,36 @@ import {
   sentenceCase,
 } from "@/lib/format/display";
 import { presentLeadCopy, sourceLabel } from "@/lib/leads/public-names";
-import { buildActionPlan, mergeSaved, planFinding, planProgress, type PlanField } from "@/lib/plan/build";
+import { buildActionPlan, mergeSaved, planProgress, type PlanField } from "@/lib/plan/build";
 import { FIELD_STATUSES } from "@/lib/db/vocab";
+import {
+  FINANCING_RATE,
+  PROFIT_EMPTY,
+  delayTable,
+  formatKes,
+  profitResult,
+  typicalDelayDays,
+} from "@/lib/recommendation/profit";
 import { isWithdrawnByAddendum, matchRequirements } from "@/lib/readiness/match";
 import { daysUntilDeadline } from "@/lib/recommendation/deadline";
-import type { BidDecisionRecord } from "@/lib/recommendation/decision";
-import { RECOMMENDATION_LABEL } from "@/lib/recommendation/labels";
+import { RECOMMENDATION_LABEL, RULE_TEXT } from "@/lib/recommendation/labels";
 import { isClarificationKey, recommend } from "@/lib/recommendation/recommend";
 import { decisionTrail, latestBidDecision } from "@/lib/recommendation/trail";
 import type { GroupStats } from "@/lib/tenders/extract-pipeline";
 import { findBidSecurityConflicts } from "@/lib/tenders/document-conflicts";
+import type { WorkspaceTabId } from "@/lib/tenders/workspace-stages";
 import { ADDENDUM_FIELD_GROUPS, FIELD_SPECS, MAIN_FIELD_GROUPS } from "@/lib/tenders/field-catalog";
 import { summarizeReview } from "@/lib/tenders/review";
-import { commercialFinding, complianceFinding, formatReviewedAt, interpretationFinding, latestByStage } from "@/lib/tenders/stage-review";
+import { commercialFinding, complianceFinding, interpretationFinding, latestByStage } from "@/lib/tenders/stage-review";
 import { buildWhatMatters } from "@/lib/tenders/what-matters";
-import { cn } from "@/lib/utils";
-
 import { ActionPlan } from "./action-plan";
-import { AgentSection, AssessmentStepper, ProceedSection } from "./assessment-journey";
 import { DecisionTrail } from "./decision-trail";
 import { ExtractionStatus, type SourceStatus } from "./extraction-status";
-import { ProfitCard } from "./profit-card";
+import { ProfitForm } from "./profit-form";
 import { ReadinessCard } from "./readiness-card";
 import { RecommendationCard } from "./recommendation-card";
 import { FieldsView, type ViewField } from "./fields-view";
+import { TenderWorkspace } from "./workspace";
 import TenderLoading from "./loading";
 
 export const metadata: Metadata = { title: "Tender" };
@@ -142,6 +144,9 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
   const summary = summarizeReview(viewFields, sourceRoles);
   const mainSourceIds = sources.filter((s) => s.role === "main").map((s) => s.id);
   const securityPages = await listSecurityPages(mainSourceIds);
+  const securityConflict = findBidSecurityConflicts(
+    securityPages.map((page) => ({ pageNo: page.page_no, text: page.text })),
+  );
   const matters = buildWhatMatters({
     fields: viewFields.map((field) => ({
       id: field.id,
@@ -151,7 +156,7 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
       page_no: field.page_no,
       role: field.source_id ? (sourceRoles.get(field.source_id) ?? "main") : "main",
     })),
-    conflict: findBidSecurityConflicts(securityPages.map((page) => ({ pageNo: page.page_no, text: page.text }))),
+    conflict: securityConflict,
     needsHuman: summary.byStatus.needs_human,
     addendumConflicts: summary.conflicts.length,
   });
@@ -263,206 +268,189 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
     countyRisk && countyRisk.score !== null
       ? commercialFinding({ county: countyRisk.county, score: countyRisk.score, bandLabel: RISK_LABEL[countyRisk.band] })
       : commercialFinding(null);
+  const countLine =
+    summary.total > 0
+      ? ` ${summary.total} fields: ${FIELD_STATUSES.map((status) => `${summary.byStatus[status]} ${STATUS_META[status].label}`).join(", ")}.`
+      : "";
+  const heads: Record<WorkspaceTabId, { title: string; summary: string }> = {
+    interpretation: {
+      title: "Interpretation",
+      summary: `${interpretationFinding({ facts: summary.total, needsHuman: summary.byStatus.needs_human })}${countLine}`,
+    },
+    compliance: {
+      title: "Compliance",
+      summary: complianceFinding({
+        met: readiness.met,
+        gaps: readiness.gaps,
+        couldDisqualify: readiness.couldDisqualify,
+        toPrepare: readiness.toPrepare,
+        total: readiness.items.length,
+      }),
+    },
+    commercial: { title: "Commercial", summary: commercial },
+    recommendation: {
+      title: "Recommendation",
+      summary: `${RECOMMENDATION_LABEL[recommendation.label]}. ${RULE_TEXT[recommendation.rule]}.`,
+    },
+    preparation: { title: "Bid preparation", summary: plan.label },
+  };
+  const figures = {
+    contractValueKes: opportunity.contract_value_kes,
+    deliveryCostKes: opportunity.delivery_cost_kes,
+    band: countyRisk?.band ?? null,
+  };
+  const profit = profitResult(figures);
+  const delayRows = delayTable(figures);
+  const bandDays = typicalDelayDays(figures.band);
+  const bandWord = countyRisk && countyRisk.band !== "unknown" ? RISK_LABEL[countyRisk.band] : null;
+  const mainPdf = pdfSources.find((source) => source.role === "main");
+  const openHref = mainPdf ? (fileUrls[mainPdf.id] ?? null) : null;
+  const viewSources = sources.map((source) => ({
+    id: source.id,
+    name:
+      source.kind === "form"
+        ? sourceLabel({
+            kind: source.kind,
+            opportunityType: opportunity.type === "field" ? "field" : "procurement",
+          })
+        : source.original_name,
+    role: source.role,
+    fileUrl: fileUrls[source.id] ?? null,
+  }));
 
   return (
-    <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-col gap-8">
-      <PageNav
-        crumbs={[
-          { href: NAV.overview.href, label: NAV.overview.title },
-          { href: NAV.tenders.href, label: NAV.tenders.title },
-          { label: heading },
-        ]}
-      />
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 space-y-2">
-          <h1 className="line-clamp-2 text-3xl font-semibold tracking-tight" title={displayTitle}>
+    <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-col gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-semibold tracking-[0.14em] text-brand uppercase">Tender workspace</p>
+          <h1 className="font-heading line-clamp-2 text-3xl tracking-tight" title={displayTitle}>
             {heading}
           </h1>
-          <p className="break-words text-muted-foreground">
-            {[
-              displayOrganization ? sentenceCase(displayOrganization) : "Buyer not stated",
-              countyLabel ? sentenceCase(countyLabel) : "County not stated",
-              closing ? `Closes ${sentenceCase(closing)}` : "Closing date not stated",
-            ].join(" · ")}
+          <p className="max-w-2xl text-muted-foreground">
+            A guided review from the uploaded tender to a recorded decision. Nothing is submitted.
           </p>
-          {displayReference && <p className="text-sm text-muted-foreground">{displayReference}</p>}
         </div>
-        {hasMainPdf && (
-          <Button variant="outline" nativeButton={false} render={<Link href={`/tenders/new?addendum=${opportunity.id}`} />}>
-            <FilePlus2 aria-hidden /> Upload an addendum
+        {openHref && (
+          <Button variant="outline" size="lg" nativeButton={false} render={<a href={openHref} target="_blank" rel="noreferrer" />}>
+            Open tender
           </Button>
         )}
       </div>
 
-      <DecisionCard decision={latestDecision} />
-
-      <AssessmentStepper reviews={reviews} planDone={plan.done} planTotal={plan.total} />
-
-      <AgentSection
-        stage="can_bid"
+      <TenderWorkspace
         tenderId={opportunity.id}
-        finding={interpretationFinding({ facts: summary.total, needsHuman: summary.byStatus.needs_human })}
-        review={reviews.can_bid}
-      >
-      <FieldsView
-        fields={displayFields}
-        sources={sources.map((s) => ({
-          id: s.id,
-          name:
-            s.kind === "form"
-              ? sourceLabel({
-                  kind: s.kind,
-                  opportunityType: opportunity.type === "field" ? "field" : "procurement",
-                })
-              : s.original_name,
-          role: s.role,
-          fileUrl: fileUrls[s.id] ?? null,
-        }))}
-        conflicts={summary.conflicts}
-        pageTexts={pageTexts}
-        matters={matters}
+        title={heading}
+        buyer={displayOrganization ? sentenceCase(displayOrganization) : "Buyer not stated"}
+        reference={displayReference ?? "Not stated"}
+        closing={closing ? sentenceCase(closing) : "Not stated"}
+        addendumHref={hasMainPdf ? `/tenders/new?addendum=${opportunity.id}` : "/tenders/new"}
+        approval={{
+          canBid: reviews.can_bid !== null,
+          canComply: reviews.can_comply !== null,
+          shouldBid: reviews.should_bid !== null,
+          decision: latestDecision !== null,
+          preparation: plan.total === 0 || plan.done === plan.total,
+        }}
+        heads={heads}
+        recommendedLabel={recommendation.label}
+        planDone={plan.done}
+        planTotal={plan.total}
+        interpretation={
+          <>
+            <FieldsView
+              fields={displayFields}
+              sources={viewSources}
+              conflicts={summary.conflicts}
+              pageTexts={pageTexts}
+              matters={matters}
+              securityConflict={securityConflict}
+            />
+            {pdfSources.length > 0 && <ExtractionStatus opportunityId={opportunity.id} sources={sourceStatuses} />}
+          </>
+        }
+        compliance={
+          <>
+            <ReadinessCard
+              result={readiness}
+              withdrawn={withdrawn.map((field) => field.value!.replace(/\s+/g, " ").slice(0, 90))}
+            />
+            {readinessError && (
+              <p className="mx-5 mb-4 rounded-lg border border-blocker/40 bg-blocker/10 px-4 py-3 text-blocker">
+                {readinessError}
+              </p>
+            )}
+          </>
+        }
+        commercial={
+          <div className="flex flex-col gap-4 px-5 py-4">
+            <PaymentCard risk={countyRisk} />
+            <ProfitForm
+              tenderId={opportunity.id}
+              contractValue={kesInput(opportunity.contract_value_kes)}
+              deliveryCost={kesInput(opportunity.delivery_cost_kes)}
+              onTimeLabel={profit ? `If paid on time: ${formatKes(profit.onTimeKes)}` : null}
+              rateNote={
+                delayRows
+                  ? `Loan rate ${Math.round(FINANCING_RATE * 100)}% a year. The company profile does not record a loan rate, so the margin calculation uses this rate.`
+                  : null
+              }
+              bandNote={
+                delayRows
+                  ? bandDays && bandWord
+                    ? `${bandDays} days is the scenario for the ${bandWord} band. The highlighted row is that band. This is the unpaid-bills band, not a date the county will pay.`
+                    : "No county score, so no band row is highlighted."
+                  : null
+              }
+              lateNote={profit?.lateNote ?? null}
+              rows={delayRows}
+              emptyMessage={PROFIT_EMPTY}
+            />
+          </div>
+        }
+        recommendation={<RecommendationCard recommendation={recommendation} decision={latestDecision} />}
+        preparation={<ActionPlan tenderId={opportunity.id} rows={planRows} editable />}
       />
-      {summary.total > 0 && (
-        <Card>
-          <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-4">
-            <div className="flex items-center gap-3">
-              <ShieldAlert
-                className={cn("size-9", summary.needsReview > 0 ? "text-red-600" : "text-green-600")}
-                aria-hidden
-              />
-              <div>
-                <div className="text-3xl font-semibold tabular-nums">{summary.needsReview}</div>
-                <div className="text-muted-foreground">
-                  need{summary.needsReview === 1 ? "s" : ""} human review
-                  {summary.conflicts.length > 0 &&
-                    ` (${summary.byStatus.needs_human} unverified field${summary.byStatus.needs_human === 1 ? "" : "s"} + ${summary.conflicts.length} addendum conflict${summary.conflicts.length === 1 ? "" : "s"})`}
-                </div>
-              </div>
-            </div>
-            <dl className="flex flex-wrap gap-x-6 gap-y-2">
-              <div>
-                <dt className="text-sm text-muted-foreground">Fields</dt>
-                <dd className="text-xl font-semibold tabular-nums">{summary.total}</dd>
-              </div>
-              {FIELD_STATUSES.map((s) => (
-                <div key={s}>
-                  <dt className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <span className={cn("size-2 rounded-full", STATUS_META[s].dot)} aria-hidden />
-                    {STATUS_META[s].label}
-                  </dt>
-                  <dd className="text-xl font-semibold tabular-nums">{summary.byStatus[s]}</dd>
-                </div>
-              ))}
-            </dl>
-          </CardContent>
-        </Card>
-      )}
-      </AgentSection>
 
-      <AgentSection
-        stage="can_comply"
-        tenderId={opportunity.id}
-        finding={complianceFinding({
-          met: readiness.met,
-          gaps: readiness.gaps,
-          couldDisqualify: readiness.couldDisqualify,
-          toPrepare: readiness.toPrepare,
-          total: readiness.items.length,
-        })}
-        review={reviews.can_comply}
-      >
-        <ReadinessCard
-          result={readiness}
-          companyName={workspaceName}
-          withdrawn={withdrawn.map((field) => field.value!.replace(/\s+/g, " ").slice(0, 90))}
-        />
-        {readinessError && (
-          <p className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-red-800">{readinessError}</p>
-        )}
-      </AgentSection>
-
-      <AgentSection
-        stage="should_bid"
-        tenderId={opportunity.id}
-        finding={`${commercial} Recommendation: ${RECOMMENDATION_LABEL[recommendation.label]}.`}
-        review={reviews.should_bid}
-      >
-        <PaymentCard risk={countyRisk} />
-        <ProfitCard
-          tenderId={opportunity.id}
-          contractValueKes={opportunity.contract_value_kes}
-          deliveryCostKes={opportunity.delivery_cost_kes}
-          band={countyRisk?.band ?? null}
-        />
-        <RecommendationCard tenderId={opportunity.id} recommendation={recommendation} />
-      </AgentSection>
-
-      <ProceedSection finding={planFinding(actionPlan)} progressLabel={plan.label}>
-        <ActionPlan tenderId={opportunity.id} rows={planRows} editable />
-      </ProceedSection>
-
-      {pdfSources.length > 0 && <ExtractionStatus opportunityId={opportunity.id} sources={sourceStatuses} />}
       <DecisionTrail entries={trail} />
     </div>
   );
 }
 
-function DecisionCard({ decision }: { decision: BidDecisionRecord | null }) {
-  return (
-    <Card>
-      <CardHeader className="gap-2">
-        <p className="text-sm text-muted-foreground">Decision</p>
-        <CardTitle className="text-3xl">
-          {decision ? RECOMMENDATION_LABEL[decision.finalLabel] : "No decision recorded"}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-muted-foreground">
-          {decision
-            ? `${decision.action === "approve" ? "Approved" : "Overridden"} by ${decision.reviewerName} · ${formatReviewedAt(decision.createdAt)}`
-            : "No one has approved or overridden the recommendation."}
-        </p>
-        {decision?.reason && <p className="mt-2">{decision.reason}</p>}
-      </CardContent>
-    </Card>
-  );
+function kesInput(value: number | null): string {
+  if (value === null) return "";
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
 function PaymentCard({ risk }: { risk: CountyRiskListItem | undefined }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-xl">Payment risk</CardTitle>
-        <CardDescription>
-          Unpaid bills for this buyer&apos;s county. This is not a forecast of when the buyer will pay.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        {risk && risk.score !== null ? (
-          <>
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div className="flex flex-col gap-2">
-                <span className="font-medium">{risk.county}</span>
-                <RiskBadge band={risk.band} />
-              </div>
-              <span className="text-3xl font-semibold tabular-nums">{risk.score.toFixed(1)}</span>
+    <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/40 px-4 py-4">
+      <p className="text-muted-foreground">
+        Unpaid bills for this buyer&apos;s county. This is not a forecast of when the buyer will pay.
+      </p>
+      {risk && risk.score !== null ? (
+        <>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="flex flex-col gap-2">
+              <span className="font-medium">{risk.county}</span>
+              <RiskBadge band={risk.band} />
             </div>
-            <p>{countyScoreReason(risk)}</p>
-            <p className="text-muted-foreground">
-              Controller of Budget, as at {formatWhen(risk.asOf) ?? risk.asOf}. Confidence:{" "}
-              {confidenceLabel(risk.confidence)}.
-            </p>
-          </>
-        ) : (
-          <p className="text-muted-foreground">No county score for this buyer.</p>
-        )}
-        <Link href="/counties" className="text-sm text-primary underline-offset-4 hover:underline">
-          See all counties
-        </Link>
-      </CardContent>
-    </Card>
+            <span className="font-heading text-3xl font-semibold tabular-nums">{risk.score.toFixed(1)}</span>
+          </div>
+          <p>{countyScoreReason(risk)}</p>
+          <p className="text-muted-foreground">
+            Controller of Budget, as at {formatWhen(risk.asOf) ?? risk.asOf}. Confidence: {confidenceLabel(risk.confidence)}.
+          </p>
+        </>
+      ) : (
+        <p className="text-muted-foreground">No county score for this buyer.</p>
+      )}
+      <Link href="/counties" className="w-fit text-sm font-medium text-brand hover:underline">
+        See all counties
+      </Link>
+    </div>
   );
 }
+
 
 export default function TenderPage(props: PageProps<"/tenders/[id]">) {
   return (

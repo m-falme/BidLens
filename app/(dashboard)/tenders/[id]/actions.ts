@@ -19,6 +19,8 @@ export async function saveStageReview(input: unknown): Promise<StageReviewAction
   try {
     await insertStageReview(parsed.value);
     revalidatePath(`/tenders/${parsed.value.tenderId}`);
+    revalidatePath("/tenders");
+    revalidatePath("/");
     return { ok: true };
   } catch (error) {
     console.error("save stage review", error);

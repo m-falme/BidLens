@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { PROFIT_EMPTY, formatKes, parseKesInput, profitCopy, profitResult } from "@/lib/recommendation/profit";
+import {
+  PROFIT_EMPTY,
+  delayTable,
+  formatKes,
+  formatMarginPct,
+  parseKesInput,
+  profitCopy,
+  profitResult,
+} from "@/lib/recommendation/profit";
 import { marginAtDelay } from "@/lib/risk/margin";
 
 const contract = 8_000_000;
@@ -51,6 +59,38 @@ describe("profit view", () => {
     expect(result?.onTimeKes).toBe(-500_000);
     expect(result?.lateKes).toBeNull();
     expect(result?.lateNote).toMatch(/not below the contract value/);
+  });
+});
+
+describe("delay table", () => {
+  it("is hidden until contract value and cost are both filled", () => {
+    expect(delayTable({ contractValueKes: null, deliveryCostKes: cost, band: "low" })).toBeNull();
+    expect(delayTable({ contractValueKes: contract, deliveryCostKes: null, band: "low" })).toBeNull();
+    expect(
+      delayTable({ contractValueKes: contract, deliveryCostKes: contract + 1, band: "high" }),
+    ).toBeNull();
+  });
+
+  it("calls the margin function at 2, 6, 12 and 24 months and highlights the county band", () => {
+    const rows = delayTable({ contractValueKes: contract, deliveryCostKes: cost, band: "moderate" });
+    expect(rows?.map((row) => row.months)).toEqual([2, 6, 12, 24]);
+    expect(rows?.map((row) => row.days)).toEqual([60, 180, 365, 730]);
+    expect(rows?.map((row) => row.countyBand)).toEqual([false, true, false, false]);
+    const six = marginAtDelay(margin, 180);
+    expect(rows?.[1]?.financingKes).toBeCloseTo(six.financing, 6);
+    expect(rows?.[1]?.profitKes).toBeCloseTo(six.net, 6);
+    expect(rows?.[1]?.margin).toBeCloseTo(six.margin, 6);
+    expect(rows?.[3]?.profitKes).toBeCloseTo(marginAtDelay(margin, 730).net, 6);
+  });
+
+  it("highlights no row when the county has no score", () => {
+    const rows = delayTable({ contractValueKes: contract, deliveryCostKes: cost, band: null });
+    expect(rows?.every((row) => !row.countyBand)).toBe(true);
+  });
+
+  it("formats the margin after finance", () => {
+    expect(formatMarginPct(0.19)).toBe("19.0%");
+    expect(formatMarginPct(-0.139)).toBe("-13.9%");
   });
 });
 

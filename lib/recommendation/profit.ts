@@ -46,6 +46,58 @@ export function typicalDelayDays(band: RiskBand | null): number | null {
   return TYPICAL_DELAY_DAYS[band];
 }
 
+/**
+ * Rows for the commercial delay table. Same day counts as the county bands:
+ * 2 months = 60, 6 = 180, 12 = 365, 24 = 730. Null until both figures can be financed.
+ */
+export const DELAY_TABLE_ROWS = [
+  { months: 2, days: TYPICAL_DELAY_DAYS.low },
+  { months: 6, days: TYPICAL_DELAY_DAYS.moderate },
+  { months: 12, days: TYPICAL_DELAY_DAYS.high },
+  { months: 24, days: TYPICAL_DELAY_DAYS.severe },
+] as const;
+
+export interface DelayTableRow {
+  months: (typeof DELAY_TABLE_ROWS)[number]["months"];
+  days: number;
+  financingKes: number;
+  profitKes: number;
+  /** net / contract value */
+  margin: number;
+  /** This row is the county band scenario. */
+  countyBand: boolean;
+}
+
+export function formatMarginPct(margin: number): string {
+  const pct = Math.round(margin * 1000) / 10;
+  const sign = pct < 0 ? "-" : "";
+  return `${sign}${Math.abs(pct).toFixed(1)}%`;
+}
+
+/** Null when either amount is missing, or cost is not below a positive contract value. */
+export function delayTable(input: ProfitInput): DelayTableRow[] | null {
+  const contract = input.contractValueKes;
+  const cost = input.deliveryCostKes;
+  if (contract === null || cost === null) return null;
+  if (!(contract > 0) || !(cost >= 0)) return null;
+  const margin = (contract - cost) / contract;
+  if (!(margin >= 0 && margin < 1)) return null;
+
+  const figures = { V: contract, m: margin, r: FINANCING_RATE };
+  const bandDays = typicalDelayDays(input.band);
+  return DELAY_TABLE_ROWS.map((row) => {
+    const scenario = marginAtDelay(figures, row.days);
+    return {
+      months: row.months,
+      days: row.days,
+      financingKes: scenario.financing,
+      profitKes: scenario.net,
+      margin: scenario.margin,
+      countyBand: bandDays === row.days,
+    };
+  });
+}
+
 export function formatKes(amount: number): string {
   const rounded = Math.round(amount);
   const sign = rounded < 0 ? "-" : "";

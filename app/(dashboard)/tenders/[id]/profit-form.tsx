@@ -6,6 +6,8 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { formatKes, formatMarginPct, type DelayTableRow } from "@/lib/recommendation/profit";
+import { cn } from "@/lib/utils";
 
 import { saveTenderFiguresAction } from "./actions";
 
@@ -13,13 +15,21 @@ export function ProfitForm({
   tenderId,
   contractValue,
   deliveryCost,
-  lines,
+  onTimeLabel,
+  rateNote,
+  bandNote,
+  lateNote,
+  rows,
   emptyMessage,
 }: {
   tenderId: string;
   contractValue: string;
   deliveryCost: string;
-  lines: string[] | null;
+  onTimeLabel: string | null;
+  rateNote: string | null;
+  bandNote: string | null;
+  lateNote: string | null;
+  rows: DelayTableRow[] | null;
   emptyMessage: string;
 }) {
   const [value, setValue] = useState(contractValue);
@@ -76,17 +86,46 @@ export function ProfitForm({
           />
         </div>
       </div>
-      {lines === null ? (
-        <p className="text-muted-foreground">{emptyMessage}</p>
+      {rows === null ? (
+        <p className="text-muted-foreground">{lateNote ?? emptyMessage}</p>
       ) : (
-        <div className="flex flex-col gap-1">
-          {lines.map((line) => (
-            <p key={line}>{line}</p>
-          ))}
+        <div className="flex flex-col gap-3">
+          {onTimeLabel && <p>{onTimeLabel}</p>}
+          {rateNote && <p className="text-muted-foreground">{rateNote}</p>}
+          <div className="overflow-x-auto">
+            <table className="w-full table-fixed border-collapse text-left text-sm">
+              <caption className="sr-only">Payment delay at 2, 6, 12 and 24 months</caption>
+              <thead>
+                <tr className="border-b border-border text-muted-foreground">
+                  <th className="px-2 py-2 font-medium">Payment delay</th>
+                  <th className="px-2 py-2 font-medium">Estimated finance cost</th>
+                  <th className="px-2 py-2 font-medium">Scenario profit</th>
+                  <th className="px-2 py-2 font-medium">Margin after finance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr
+                    key={row.months}
+                    className={cn("border-b border-border/80", row.countyBand && "bg-warning/15")}
+                  >
+                    <td className="px-2 py-3 font-medium">
+                      {row.months} months
+                      {row.countyBand && <span className="mt-0.5 block text-warning">County band</span>}
+                    </td>
+                    <td className="px-2 py-3 tabular-nums">{formatKes(row.financingKes)}</td>
+                    <td className="px-2 py-3 font-semibold tabular-nums">{formatKes(row.profitKes)}</td>
+                    <td className="px-2 py-3 tabular-nums">{formatMarginPct(row.margin)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {bandNote && <p className="text-muted-foreground">{bandNote}</p>}
         </div>
       )}
       {error && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-blocker">
           {error}
         </p>
       )}

@@ -23,7 +23,8 @@ async function CompanyProfile() {
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
       <PageNav crumbs={[{ href: NAV.overview.href, label: NAV.overview.title }, { label: NAV.company.title }]} />
       <div className="space-y-1">
-        <h1 className="text-3xl font-semibold tracking-tight">{company.legalName ?? company.name}</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">{NAV.company.title}</h1>
+        <p className="text-lg font-medium">{company.legalName ?? company.name}</p>
         <p className="text-lg text-muted-foreground">{NAV.company.description}</p>
       </div>
 

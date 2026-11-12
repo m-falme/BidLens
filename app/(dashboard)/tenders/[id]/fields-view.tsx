@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ExternalLink, GitCompareArrows } from "lucide-react";
 
 import { EvidenceChip, StatusBadge } from "@/components/evidence/status-badge";
@@ -304,7 +304,6 @@ export function FieldsView({
   conflicts,
   pageTexts,
   matters,
-  children,
 }: {
   fields: ViewField[];
   sources: ViewSource[];
@@ -312,7 +311,6 @@ export function FieldsView({
   /** `${source_id}:${page_no}` → page text, for every cited page. */
   pageTexts: Record<string, string>;
   matters: MatterPoint[];
-  children?: ReactNode;
 }) {
   const [open, setOpen] = useState<ViewField | null>(null);
   const byId = new Map(fields.map((f) => [f.id, f]));
@@ -321,7 +319,6 @@ export function FieldsView({
   return (
     <div className="flex flex-col gap-8">
       <WhatMattersCard points={matters} fields={byId} onOpen={setOpen} />
-      {children}
       {conflicts.length > 0 && (
         <Card className="border-amber-300 dark:border-amber-800">
           <CardHeader>

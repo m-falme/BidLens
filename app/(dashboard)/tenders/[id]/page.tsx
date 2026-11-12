@@ -12,7 +12,9 @@ import { STATUS_META } from "@/components/evidence/status-badge";
 import { RiskBadge } from "@/components/tenders/markers";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getWorkspaceName } from "@/lib/db/queries/company";
 import { listDemoCapabilities, replaceReadiness } from "@/lib/db/queries/readiness";
+import { listStageReviews } from "@/lib/db/queries/stage-reviews";
 import {
   getLatestDecision,
   getTenderDetail,
@@ -21,7 +23,7 @@ import {
   type CountyRiskListItem,
   type RunRecord,
 } from "@/lib/db/queries/tenders";
-import { closingLabel, confidenceLabel, DECISION_LABEL, formatWhen, matchCountyName, sentenceCase, type DecisionChoice } from "@/lib/format/display";
+import { closingLabel, confidenceLabel, DECISION_LABEL, formatWhen, matchCountyName, RISK_LABEL, sentenceCase, type DecisionChoice } from "@/lib/format/display";
 import { presentLeadCopy, sourceLabel } from "@/lib/leads/public-names";
 import { FIELD_STATUSES } from "@/lib/db/vocab";
 import { isWithdrawnByAddendum, matchRequirements } from "@/lib/readiness/match";
@@ -29,9 +31,11 @@ import type { GroupStats } from "@/lib/tenders/extract-pipeline";
 import { findBidSecurityConflicts } from "@/lib/tenders/document-conflicts";
 import { ADDENDUM_FIELD_GROUPS, MAIN_FIELD_GROUPS } from "@/lib/tenders/field-catalog";
 import { summarizeReview } from "@/lib/tenders/review";
+import { commercialFinding, complianceFinding, interpretationFinding, latestByStage } from "@/lib/tenders/stage-review";
 import { buildWhatMatters } from "@/lib/tenders/what-matters";
 import { cn } from "@/lib/utils";
 
+import { AgentSection, AssessmentStepper } from "./assessment-journey";
 import { ExtractionStatus, type SourceStatus } from "./extraction-status";
 import { ReadinessCard } from "./readiness-card";
 import { FieldsView, type ViewField } from "./fields-view";
@@ -57,7 +61,13 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
   await connection();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
-  const [detail, decision, counties] = await Promise.all([getTenderDetail(id), getLatestDecision(id), listCountyRisk()]);
+  const [detail, decision, counties, stageReviews, workspaceName] = await Promise.all([
+    getTenderDetail(id),
+    getLatestDecision(id),
+    listCountyRisk(),
+    listStageReviews(id),
+    getWorkspaceName(),
+  ]);
   if (!detail) notFound();
 
   const { opportunity, sources, runs, fields, pages, citedPages, fileUrls } = detail;
@@ -143,6 +153,8 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
         quote: field.quote,
       })),
     await listDemoCapabilities(),
+    undefined,
+    workspaceName,
   );
   let readinessError: string | null = null;
   try {
@@ -171,6 +183,11 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
   const closingText = viewFields.find((field) => field.key === "closing_datetime" && field.value)?.value ?? null;
   const closing = closingLabel(workbookLead ? presentLeadCopy(closingText) : closingText, opportunity.deadline_at);
   const heading = sentenceCase(displayTitle);
+  const reviews = latestByStage(stageReviews);
+  const commercial =
+    countyRisk && countyRisk.score !== null
+      ? commercialFinding({ county: countyRisk.county, score: countyRisk.score, bandLabel: RISK_LABEL[countyRisk.band] })
+      : commercialFinding(null);
 
   return (
     <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-col gap-8">
@@ -202,8 +219,14 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
         )}
       </div>
 
-      <DecisionCard choice={decision} />
+      <AssessmentStepper reviews={reviews} />
 
+      <AgentSection
+        stage="can_bid"
+        tenderId={opportunity.id}
+        finding={interpretationFinding({ facts: summary.total, needsHuman: summary.byStatus.needs_human })}
+        review={reviews.can_bid}
+      >
       <FieldsView
         fields={displayFields}
         sources={sources.map((s) => ({
@@ -221,17 +244,7 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
         conflicts={summary.conflicts}
         pageTexts={pageTexts}
         matters={matters}
-      >
-      <ReadinessCard
-        result={readiness}
-        withdrawn={withdrawn.map((field) => field.value!.replace(/\s+/g, " ").slice(0, 90))}
       />
-      <PaymentCard risk={countyRisk} />
-      {readinessError && (
-        <p className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-red-800">{readinessError}</p>
-      )}
-      </FieldsView>
-
       {summary.total > 0 && (
         <Card>
           <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-4">
@@ -267,6 +280,39 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
           </CardContent>
         </Card>
       )}
+      </AgentSection>
+
+      <AgentSection
+        stage="can_comply"
+        tenderId={opportunity.id}
+        finding={complianceFinding({
+          met: readiness.met,
+          gaps: readiness.gaps,
+          couldDisqualify: readiness.couldDisqualify,
+          toPrepare: readiness.toPrepare,
+          total: readiness.items.length,
+        })}
+        review={reviews.can_comply}
+      >
+        <ReadinessCard
+          result={readiness}
+          companyName={workspaceName}
+          withdrawn={withdrawn.map((field) => field.value!.replace(/\s+/g, " ").slice(0, 90))}
+        />
+        {readinessError && (
+          <p className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-red-800">{readinessError}</p>
+        )}
+      </AgentSection>
+
+      <AgentSection
+        stage="should_bid"
+        tenderId={opportunity.id}
+        finding={commercial}
+        review={reviews.should_bid}
+      >
+        <PaymentCard risk={countyRisk} />
+        <DecisionCard choice={decision} />
+      </AgentSection>
 
       {pdfSources.length > 0 && <ExtractionStatus opportunityId={opportunity.id} sources={sourceStatuses} />}
     </div>

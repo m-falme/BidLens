@@ -35,7 +35,7 @@ export default function NewTenderPage(props: PageProps<"/tenders/new">) {
       <div className="space-y-1">
         <h1 className="text-3xl font-semibold tracking-tight">Upload a tender</h1>
         <p className="text-lg text-muted-foreground">
-          BidLens reads every page, extracts the key requirements and checks each quote against the page it cites.
+          BidLens Tenders reads every page, extracts the key requirements and checks each quote against the page it cites.
         </p>
       </div>
       <Card>

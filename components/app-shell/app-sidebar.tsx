@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Suspense } from "react";
-import { Building2 } from "lucide-react";
-
+import { Suspense, type ReactNode } from "react";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
@@ -16,7 +15,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import { DEMO_COMPANY_NAME } from "@/lib/app-config";
+import { APP_BYLINE, APP_NAME, APP_TAGLINE } from "@/lib/app-config";
 
 import { NAV_ITEMS, isNavItemActive } from "./nav";
 
@@ -48,17 +47,18 @@ function ActiveNavMenu() {
   return <NavMenu pathname={usePathname()} />;
 }
 
-export function AppSidebar() {
+export function AppSidebar({ workspace }: { workspace: ReactNode }) {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="flex items-center gap-2 p-1">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <Building2 className="size-4" aria-hidden />
+        <div className="flex items-start gap-2.5 p-1">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground">
+            BT
           </div>
-          <div className="grid leading-tight group-data-[collapsible=icon]:hidden">
-            <span className="truncate font-semibold">{DEMO_COMPANY_NAME}</span>
-            <span className="truncate text-xs text-muted-foreground">Bid team</span>
+          <div className="grid gap-0.5 leading-tight group-data-[collapsible=icon]:hidden">
+            <span className="font-semibold">{APP_NAME}</span>
+            <span className="text-sm text-muted-foreground">{APP_TAGLINE}</span>
+            <span className="text-sm text-muted-foreground">{APP_BYLINE}</span>
           </div>
         </div>
       </SidebarHeader>
@@ -71,6 +71,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>{workspace}</SidebarFooter>
       <SidebarRail />
     </Sidebar>
   );

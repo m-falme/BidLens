@@ -13,19 +13,27 @@ const MATCH_CLASS: Record<ReadinessMatch, string> = {
 export function ReadinessCard({
   result,
   withdrawn,
+  companyName = "your company",
 }: {
   result: ReadinessResult;
   /** Mandatory lines an addendum withdrew, so they are not counted as gaps. */
   withdrawn: readonly string[];
+  companyName?: string;
 }) {
+  const who = companyName.trim() || "your company";
+  const yours = who.toLowerCase() === "your company";
+  const title = yours
+    ? "Can your company meet the mandatory requirements?"
+    : `Can ${who} meet the mandatory requirements?`;
+  const against = yours ? "your company's" : `${who}'s`;
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-xl">Can Zanari meet the mandatory requirements?</CardTitle>
+        <CardTitle className="text-xl">{title}</CardTitle>
         <CardDescription>
-          Matched against Zanari&apos;s company documents and services. A line is met only when it links to a paper
-          marked Have. Met (self-declared) is the team&apos;s own mark, not a checked file. Forms to fill in and sign
-          are to prepare, not gaps.
+          Matched against {against} documents and services. A line is met only when it links to a paper marked Have.
+          Met (self-declared) is the team&apos;s own mark, not a checked file. Forms to fill in and sign are to
+          prepare, not gaps.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">

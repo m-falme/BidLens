@@ -73,12 +73,13 @@ All tables have `id uuid pk default gen_random_uuid()`, `created_at timestamptz 
 | `county_risk` | county, pending_bills_id, score, band, confidence, part_a, part_b, part_c, reason, as_of | Computed by `lib/risk/county-score.ts`, stored for the dashboard |
 | `risk_assessments` | opportunity_id, inputs_json (V, m, r, adv, f, s, ir), scenarios_json, breakeven_days, price_to_keep_margin_json, clause_flags_json, recommendation, reasons_json | One per run; keep history |
 | `decisions` | opportunity_id, choice (`bid`/`bid_higher`/`ask_advance`/`skip`), note, decided_by, snapshot_json | Human decision log |
+| `stage_reviews` | tender_id, stage (`can_bid`/`can_comply`/`should_bid`), reviewer_name, note | Insert-only review of each assessment step. The start of the decision trail. |
 | `proposals` | opportunity_id, version int, brief_md, draft_md, status (`draft`/`in_review`/`approved`), placeholders_json | Editable, versioned |
 | `activities` | opportunity_id, kind (`status_change`/`note`/`edit`/`duplicate_flag`), payload_json, actor | Audit trail and pipeline history |
 | `duplicate_candidates` | opportunity_id, candidate_id, score, reasons_json, resolution (`open`/`not_duplicate`/`same`) | Never auto-merge |
 | `extraction_runs` | source_id, provider, model, prompt_version, status (`running`/`succeeded`/`failed`), error, stats_json, finished_at | One log row per extraction. At most one running or succeeded run per source |
 
-RLS: on for all tables. The demo uses the service role on the server only; the browser reads through server components/actions.
+RLS: on for all tables. The app uses the service role on the server only; the browser reads through server components/actions. `stage_reviews` is insert-only (triggers refuse update and delete).
 
 ## 5. Pipelines
 ### 5.1 Tender extraction (`POST /api/tenders/:id/extract`)

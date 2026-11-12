@@ -1,4 +1,4 @@
-# PRD — BidLens
+# PRD — BidLens Tenders
 **Tender Intelligence, Bid Readiness & Payment Risk**
 TechAI Hackathon 2026 · Challenge owner: Zanari Analytics (with MsingiAI voice) · v1.0, 12 Nov 2026
 
@@ -14,7 +14,7 @@ And even a tender a company *qualifies* for can lose money. Government buyers of
 - In 3 of 3 real county ICT tenders we downloaded, the **late-payment interest rate is blank**.
 
 ## 2. Solution
-An AI-assisted workflow that turns any tender or lead into a **verified, traceable opportunity** and a clear, evidence-based **bid decision**, then into an **editable proposal draft**, with a human in control throughout.
+The name on screen is **BidLens Tenders**, “Your AI Procurement Companion”, by Tech Nova. It is an AI-assisted workflow that turns any tender or lead into a **verified, traceable opportunity** and a clear, evidence-based **bid decision**, then into an **editable proposal draft**, with a human in control throughout.
 
 > Rather than just finding tenders or summarising documents, it shows exactly what each tender demands, what the company has and lacks, **whether the buyer is likely to pay on time, and how much profit survives if they don't.**
 
@@ -100,4 +100,4 @@ Priority: **P0** = must work at the 14:00 gate · **P1** = must work for the fin
 | Running out of time | Strict P0 → P1 → P2 order; deploy early and often |
 
 ## 9. Pitch line
-**"BidLens: see if a tender will pay you before you bid."** Most tools tell you if you *can* win a tender. BidLens also tells you if it will *pay* you.
+**"BidLens Tenders: see if a tender will pay you before you bid."** Most tools tell you if you *can* win a tender. BidLens Tenders also tells you if it will *pay* you.

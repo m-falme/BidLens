@@ -33,6 +33,14 @@ function asHolding(value: string | null): DocumentHolding | null {
   return value && HOLDINGS.has(value) ? (value as DocumentHolding) : null;
 }
 
+/** The signed-in organisation. Read from the company row, not written into the brand. */
+export async function getWorkspaceName(): Promise<string> {
+  const companyId = await getDemoCompanyId();
+  const { data, error } = await getServiceClient().from("companies").select("name").eq("id", companyId).single();
+  if (error || !data) fail("load workspace", error);
+  return data.name;
+}
+
 export async function getDemoCompanyProfile(): Promise<CompanyProfile> {
   const companyId = await getDemoCompanyId();
   const db = getServiceClient();

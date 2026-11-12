@@ -27,8 +27,8 @@ export const NAV = {
   },
   company: {
     href: "/company",
-    title: "Company",
-    description: "Zanari's papers for tender checks, and the status the team sets for each one.",
+    title: "Your company",
+    description: "Papers used in tender checks, and the status set for each one.",
     icon: FolderOpen,
     planned: [],
   },

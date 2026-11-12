@@ -36,7 +36,7 @@ function pgliteWriter(db: PGlite): SeedWriter {
 const TABLES = [
   "activities", "capabilities", "companies", "county_pending_bills", "county_risk", "decisions",
   "duplicate_candidates", "fields", "opportunities", "proposals", "requirements", "risk_assessments",
-  "source_pages", "sources",
+  "source_pages", "sources", "stage_reviews",
 ];
 
 let db: PGlite;
@@ -56,6 +56,7 @@ beforeAll(async () => {
   db = new PGlite();
   await db.exec(readFileSync("supabase/migrations/0001_init.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0004_company_documents.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0005_stage_reviews.sql", "utf8"));
   plan = await buildSeedPlan(process.cwd());
   await runSeed(plan.steps, pgliteWriter(db));
 }, 120_000);
@@ -84,6 +85,27 @@ describe("0001_init.sql", () => {
           select 1 from pg_index i where i.indrelid = c.conrelid and i.indkey[0] = c.conkey[1]
         )`);
     expect(rows.map((r) => r.fk)).toEqual([]);
+  });
+});
+
+describe("0005_stage_reviews.sql", () => {
+  it("accepts a review and refuses updates and deletes", async () => {
+    const opportunity = await one<{ id: string }>(`select id from public.opportunities limit 1`);
+    await db.query(
+      `insert into public.stage_reviews (tender_id, stage, reviewer_name, note)
+       values ($1, 'can_bid', 'Amina', 'Checked the closing date')`,
+      [opportunity.id],
+    );
+    expect(await count("stage_reviews")).toBe(1);
+    await expect(db.query(`update public.stage_reviews set note = 'changed'`)).rejects.toThrow(/insert-only/);
+    await expect(db.query(`delete from public.stage_reviews`)).rejects.toThrow(/insert-only/);
+    expect(await count("stage_reviews")).toBe(1);
+    await expect(
+      db.query(
+        `insert into public.stage_reviews (tender_id, stage, reviewer_name) values ($1, 'decide', 'Amina')`,
+        [opportunity.id],
+      ),
+    ).rejects.toThrow(/stage_reviews_stage_check/);
   });
 });
 

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { BarChart3, FileSearch, ShieldCheck, type LucideIcon } from "lucide-react";
 
 import { NAV } from "@/components/app-shell/nav";
 import { DecisionBadge } from "@/components/tenders/markers";
@@ -11,6 +12,27 @@ import { listTenders } from "@/lib/db/queries/tenders";
 import { sentenceCase } from "@/lib/format/display";
 
 export const metadata: Metadata = { title: NAV.overview.title };
+
+const HOME_ACTIONS: readonly { href: string; title: string; summary: string; icon: LucideIcon }[] = [
+  {
+    href: "/tenders/new",
+    title: "Analyse Tender",
+    summary: "Extracts and explains key tender requirements.",
+    icon: FileSearch,
+  },
+  {
+    href: "/company",
+    title: "Check Compliance",
+    summary: "Checks eligibility, highlights gaps and risks.",
+    icon: ShieldCheck,
+  },
+  {
+    href: "/counties",
+    title: "Assess Viability",
+    summary: "Assesses viability and potential financial strain, like delayed payments.",
+    icon: BarChart3,
+  },
+];
 
 async function OverviewBody() {
   await connection();
@@ -79,9 +101,25 @@ async function OverviewBody() {
 export default function OverviewPage() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
-      <div className="space-y-1">
-        <h1 className="text-3xl font-semibold tracking-tight">{NAV.overview.title}</h1>
-        <p className="text-muted-foreground">Where the open tenders stand.</p>
+      <div className="space-y-2">
+        <h1 className="max-w-3xl text-3xl font-semibold tracking-tight md:text-4xl">
+          Hello! How can I support your tender assessment today?
+        </h1>
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        {HOME_ACTIONS.map((action) => (
+          <Link
+            key={action.href}
+            href={action.href}
+            className="flex h-full flex-col gap-4 rounded-2xl border bg-card p-6 shadow-sm transition hover:border-primary/40 hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            <span className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <action.icon className="size-6" aria-hidden />
+            </span>
+            <span className="text-xl font-semibold">{action.title}</span>
+            <span className="text-muted-foreground">{action.summary}</span>
+          </Link>
+        ))}
       </div>
       <Suspense
         fallback={

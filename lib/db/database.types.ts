@@ -779,6 +779,41 @@ export type Database = {
           },
         ]
       }
+      stage_reviews: {
+        Row: {
+          created_at: string
+          id: string
+          note: string | null
+          reviewer_name: string
+          stage: string
+          tender_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          reviewer_name: string
+          stage: string
+          tender_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          reviewer_name?: string
+          stage?: string
+          tender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stage_reviews_tender_id_fkey"
+            columns: ["tender_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

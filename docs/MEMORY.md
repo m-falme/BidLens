@@ -2,7 +2,7 @@
 > Cursor: update this at the end of every step. Keep it under ~60 lines. Newest first in "Log".
 
 ## Status
-- **Current step:** 4 in progress. Company documents and readiness labels are live. Payment risk, recommendation and deploy still to do.
+- **Current step:** 4 remaining work is the profit table and recommendation. The screen is now BidLens Tenders: purple theme, three home actions, and a three-step review on each tender. Payment risk card is in step 3. Deploy still to confirm after this push.
 - **Deployed URL:** —
 - **Repo:** https://github.com/m-falme/BidLens, branch `main`
 - **Gate:** Thu 12 Nov 2026 · assessment 14:00–15:30 EAT · cut 16:00
@@ -15,6 +15,7 @@
 - [ ] 5. Deployed public link with seeded demo data
 
 ## Decisions
+- 2026-11-12: The product name on screen is **BidLens Tenders** (tagline “Your AI Procurement Companion”, by Tech Nova). Repo, package and database identifiers stay `bidlens`. Zanari Analytics is the workspace, read from `companies.name`, not the brand.
 - 2026-11-12: Screen copy never says demo, synthetic, or a model name. Workbook buyers are shown under fictional names (Lakeview Water Services Board, Mlima Agricultural Research Institute, and three others) with normal references. Stored rows and quotes stay as loaded; a form source (not a pdf) is what marks a workbook lead. Real tender quotes are not rewritten.
 - 2026-11-12: Single Next.js app (no separate Python backend) for speed and one deploy.
 - 2026-11-12: Status of a field is set by code (quote check), never by the LLM.
@@ -56,7 +57,7 @@
 - Free-tier Gemini: `gemini-3.6-flash` is 20 requests/day (exhausted while choosing a model). Live calls use `gemini-3.5-flash-lite`. A demand spike retries once.
 - Field inserts are chunked (200) without a transaction; a mid-insert failure could leave partial fields on a failed run (runs are ~<200 fields, so one chunk in practice).
 - Scanned PDFs (e.g. Nyamira advert, 0 text): run fails with a clear "no text layer, OCR not available" message. OCR is a later step.
-- PGlite schema test applies 0001 and 0004. 0002 is on the live database. 0003 touches `storage.buckets`, which PGlite does not have.
+- PGlite schema test applies 0001, 0004 and 0005. 0002 is on the live database. 0003 touches `storage.buckets`, which PGlite does not have.
 - MsingiAI Sauti endpoint, auth format and limits: get from the challenge owner.
 - Ask mentors: must both intake options (field + procurement) be shown, or is one deep enough?
 - Vercel project not linked; Vercel env vars must use the project URL with no path.
@@ -66,6 +67,7 @@
 - npm held back esbuild's postinstall (allowScripts); tsx works regardless.
 
 ## Log
+- 2026-11-12 23:30 — Purple theme and agent journey. Home greeting plus Analyse Tender, Check Compliance, Assess Viability. Tender page is three steps with insert-only `stage_reviews` (0005 pushed). Workspace label reads the company name. 126 tests.
 - 2026-11-12 11:40 — Product UI. Deep green, breadcrumbs and Back, active nav. Tender list splits uploaded tenders and imported leads (short title, decision, risk band, closing date). Tender page leads with the decision, then what matters, readiness and the county payment-risk score; evidence stays in closed accordions. Overview shows four headlines. No recommendation or profit table is invented: nothing is recorded, and no contract value is stated.
 - 2026-11-12 11:20 — Product wording. Sidebar says Bid team. Sources say Uploaded PDF / Imported lead. Analysis line is "Analysed in Ns · N facts found". Workbook SIM-* and "Example …" names are substituted on screen only.
 - 2026-11-12 10:50 — Step 4c: company documents checklist. Nairobi 3 met (self-declared), 13 gaps, 7 could disqualify, 10 to prepare. Makueni 5 met, 1 gap (bid bond), 1 could disqualify, 7 to prepare. NCA line still excluded.

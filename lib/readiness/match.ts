@@ -156,7 +156,25 @@ function findCapability(
   return best?.capability ?? null;
 }
 
-function met(requirement: RequirementInput, capability: ProfileCapability): MatchedRequirement {
+interface CompanyVoice {
+  actor: string;
+  profile: string;
+}
+
+/** Wording for whichever company is signed in. Falls back to "your company". */
+function companyVoice(companyName?: string | null): CompanyVoice {
+  const name = companyName?.trim();
+  if (!name || /^your company$/i.test(name)) {
+    return { actor: "Your company", profile: "your company profile" };
+  }
+  return { actor: name, profile: `the ${name} profile` };
+}
+
+function cap(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function met(requirement: RequirementInput, capability: ProfileCapability, voice: CompanyVoice): MatchedRequirement {
   const selfDeclared = capability.selfDeclared === true;
   const where = capability.evidenceRef ? ` (${capability.evidenceRef})` : "";
   const ids = /national id|passport/i.test(requirement.text)
@@ -173,8 +191,8 @@ function met(requirement: RequirementInput, capability: ProfileCapability): Matc
     evidenceRef: capability.evidenceRef,
     selfDeclared,
     rationale: selfDeclared
-      ? `Zanari has marked "${capability.name}" as Have (self-declared). The file has not been checked.${ids}`
-      : `Matches "${capability.name}" in the Zanari profile${where}.`,
+      ? `${voice.actor} has marked "${capability.name}" as Have (self-declared). The file has not been checked.${ids}`
+      : `Matches "${capability.name}" in ${voice.profile}${where}.`,
     disqualifying: false,
   };
 }
@@ -231,6 +249,7 @@ function matchOne(
   requirement: RequirementInput,
   capabilities: readonly ProfileCapability[],
   asOf: string,
+  voice: CompanyVoice,
 ): MatchedRequirement {
   const text = requirement.text;
 
@@ -244,36 +263,36 @@ function matchOne(
   const paper = COMPANY_PAPERS.find((item) => item.pattern.test(text));
   if (paper) {
     const capability = capabilities.find((item) => item.name === paper.name);
-    if (capability && isHeld(capability, asOf)) return met(requirement, capability);
+    if (capability && isHeld(capability, asOf)) return met(requirement, capability, voice);
     if (capability) {
       return missing(
         requirement,
-        `Zanari has marked "${capability.name}" as ${holdingWords(capability, asOf)}. It is not met.`,
+        `${voice.actor} has marked "${capability.name}" as ${holdingWords(capability, asOf)}. It is not met.`,
       );
     }
   }
 
   if (HELD_PROOF.test(text)) {
     const capability = findCapability(text, capabilities, PROOF_KINDS, asOf);
-    if (capability) return met(requirement, capability);
+    if (capability) return met(requirement, capability, voice);
     return missing(
       requirement,
-      "The Zanari profile has no certificate, licence or document that covers this. It is not marked met.",
+      `${cap(voice.profile)} has no certificate, licence or document that covers this. It is not marked met.`,
     );
   }
 
   if (EXPERIENCE.test(text)) {
     const capability = findCapability(text, capabilities, new Set(["experience"]), asOf);
-    if (capability) return met(requirement, capability);
+    if (capability) return met(requirement, capability, voice);
     return missing(
       requirement,
-      "The Zanari profile has no experience record that covers this. It is not marked met.",
+      `${cap(voice.profile)} has no experience record that covers this. It is not marked met.`,
     );
   }
 
   const service = findCapability(text, capabilities, new Set(["service", "tool", "sector"]), asOf);
-  if (service) return met(requirement, service);
-  return unclear(requirement, "Nothing in the Zanari profile clearly covers this. A person needs to decide.");
+  if (service) return met(requirement, service, voice);
+  return unclear(requirement, `Nothing in ${voice.profile} clearly covers this. A person needs to decide.`);
 }
 
 const WITHDRAWN = /remov|delet|will not be considered|not applicable/i;
@@ -315,10 +334,12 @@ export function matchRequirements(
   requirements: readonly RequirementInput[],
   capabilities: readonly ProfileCapability[],
   asOf = new Date().toISOString().slice(0, 10),
+  companyName?: string | null,
 ): ReadinessResult {
+  const voice = companyVoice(companyName);
   const known = new Set(capabilities.map((capability) => capability.id));
   const items = requirements.map((requirement) => {
-    const item = matchOne(requirement, capabilities, asOf);
+    const item = matchOne(requirement, capabilities, asOf, voice);
     if (item.match !== "met") return item;
     const capability = capabilities.find((candidate) => candidate.id === item.capabilityId);
     const proofLine = HELD_PROOF.test(requirement.text) || EXPERIENCE.test(requirement.text) || paperLine(requirement.text);
@@ -327,7 +348,7 @@ export function matchRequirements(
     if (!capability || !known.has(capability.id) || wrongKind || notHeld) {
       return proofLine
         ? missing(requirement, "No capability in the profile covers this. It is not marked met.")
-        : unclear(requirement, "Nothing in the Zanari profile clearly covers this. A person needs to decide.");
+        : unclear(requirement, `Nothing in ${voice.profile} clearly covers this. A person needs to decide.`);
     }
     return item;
   });

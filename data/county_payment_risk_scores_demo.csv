@@ -1,0 +1,48 @@
+county,A_ageing,B_size,C_trend,score,band,confidence,reason
+Baringo,0.0,6.5,20,26.5,Moderate,HIGH,
+Bomet,4.0,9.9,10,23.9,Low,MEDIUM,CoB flags inconsistent data (asterisk)
+Bungoma,21.6,13.4,0,35.0,Moderate,MEDIUM,CoB flags inconsistent data (asterisk)
+Busia,6.5,17.4,0,23.9,Low,HIGH,
+Elgeyo-Marakwet,0.5,2.0,20,22.5,Low,HIGH,
+Embu,26.6,13.0,10,49.6,Moderate,HIGH,
+Garissa,6.6,8.2,0,14.8,Low,HIGH,
+Homa Bay,10.2,6.2,0,16.4,Low,HIGH,
+Isiolo,19.2,17.4,20,56.6,High,HIGH,
+Kajiado,23.4,14.1,10,47.5,Moderate,HIGH,
+Kakamega,1.4,12.0,20,33.4,Moderate,HIGH,
+Kericho,12.0,10.6,0,22.6,Low,HIGH,
+Kiambu,30.7,16.0,0,46.7,Moderate,HIGH,
+Kilifi,20.7,29.6,0,50.3,High,MEDIUM,CoB flags inconsistent data (asterisk)
+Kirinyaga,25.6,5.0,0,30.6,Moderate,HIGH,
+Kisii,0.3,4.6,20,24.9,Low,HIGH,
+Kisumu,26.1,3.8,0,29.9,Moderate,MEDIUM,CoB flags inconsistent data (asterisk)
+Kitui,1.6,2.5,20,24.1,Low,HIGH,
+Kwale,0.1,1.4,0,1.5,Low,HIGH,
+Laikipia,23.7,7.5,0,31.2,Moderate,MEDIUM,CoB flags inconsistent data (asterisk)
+Lamu,0.0,0.0,0,0.0,Low,HIGH,
+Machakos,22.9,22.2,0,45.1,Moderate,HIGH,
+Makueni,0.1,2.5,0,2.6,Low,MEDIUM,CoB flags inconsistent data (asterisk)
+Mandera,21.0,19.0,20,60.0,High,HIGH,
+Marsabit,27.3,9.7,10,47.0,Moderate,MEDIUM,CoB flags inconsistent data (asterisk)
+Meru,7.3,9.4,10,26.7,Moderate,HIGH,
+Migori,36.0,6.6,10,52.6,High,MEDIUM,CoB flags inconsistent data (asterisk)
+Mombasa,38.9,15.4,10,64.3,High,HIGH,
+Murang'a,18.1,9.2,0,27.3,Moderate,MEDIUM,CoB flags inconsistent data (asterisk)
+Nairobi,36.5,30.0,10,76.5,Severe,HIGH,
+Nakuru,18.9,9.2,0,28.1,Moderate,MEDIUM,CoB flags inconsistent data (asterisk)
+Nandi,,,,,UNKNOWN,NONE,no trade-payables data reported to CoB for 30 Jun 2026
+Narok,4.7,18.5,0,23.2,Low,MEDIUM,CoB flags inconsistent data (asterisk); ageing total 4382.0 differs from executive subtotal 4170.8
+Nyamira,31.6,3.1,10,44.7,Moderate,MEDIUM,zero bills under 1 year reported: ageing may be incomplete
+Nyandarua,2.2,16.9,20,39.1,Moderate,HIGH,
+Nyeri,0.2,4.5,20,24.7,Low,MEDIUM,CoB flags inconsistent data (asterisk)
+Samburu,10.8,1.1,0,11.9,Low,HIGH,
+Siaya,2.6,7.2,0,9.8,Low,HIGH,
+Taita-Taveta,32.4,20.8,20,73.2,High,HIGH,
+Tana River,25.1,13.0,0,38.1,Moderate,HIGH,
+Tharaka-Nithi,11.6,8.3,20,39.9,Moderate,MEDIUM,CoB flags inconsistent data (asterisk); ageing total 769.8 differs from executive subtotal 757.3
+Trans Nzoia,28.5,17.3,20,65.8,High,HIGH,
+Turkana,0.0,12.0,20,32.0,Moderate,MEDIUM,CoB flags inconsistent data (asterisk); ageing total 1969.4 differs from executive subtotal 2824.6
+Uasin Gishu,4.2,5.0,10,19.2,Low,HIGH,
+Vihiga,50.0,7.7,10,67.7,High,MEDIUM,zero bills under 1 year reported: ageing may be incomplete
+Wajir,30.8,18.2,0,49.0,Moderate,HIGH,
+West Pokot,32.5,2.5,10,45.0,Moderate,HIGH,

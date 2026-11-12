@@ -58,6 +58,7 @@ beforeAll(async () => {
   await db.exec(readFileSync("supabase/migrations/0004_company_documents.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0005_stage_reviews.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0006_decisions.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0007_document_never_expires.sql", "utf8"));
   plan = await buildSeedPlan(process.cwd());
   await runSeed(plan.steps, pgliteWriter(db));
 }, 120_000);
@@ -157,6 +158,9 @@ describe("seed", () => {
          from public.capabilities`,
       ),
     ).toEqual({ have: 5, missing: 7, declared: 5 });
+    expect(await one<{ n: number }>(`select count(*)::int as n from public.capabilities where never_expires`)).toEqual({
+      n: 3,
+    });
     expect(
       await one<{ field: number; procurement: number }>(
         `select count(*) filter (where type = 'field')::int as field,
@@ -208,7 +212,10 @@ describe("seed", () => {
 
   it("keeps a company-document status a person changed, and the first status", async () => {
     const id = seedId("capability", seedId("company", "Zanari Analytics"), "document", "CR12");
-    await db.query(`update public.capabilities set holding = 'expired', expires_on = '2024-01-01' where id = $1`, [id]);
+    await db.query(
+      `update public.capabilities set holding = 'expired', expires_on = '2024-01-01', never_expires = false where id = $1`,
+      [id],
+    );
     await runSeed(plan.steps, pgliteWriter(db));
     expect(
       await one(`select holding, original_holding, expires_on::text as expires_on from public.capabilities where id = $1`, [

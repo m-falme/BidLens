@@ -117,6 +117,7 @@ export async function buildSeedPlan(rootDir: string): Promise<SeedPlan> {
       holding: null,
       expires_on: null,
       self_declared: false,
+      never_expires: false,
       original_holding: null,
     }),
   );
@@ -136,6 +137,7 @@ export async function buildSeedPlan(rootDir: string): Promise<SeedPlan> {
       holding: paper.seedHolding,
       expires_on: null,
       self_declared: paper.selfDeclared,
+      never_expires: paper.doesNotExpire === true,
       original_holding: null,
     }),
   );

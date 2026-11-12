@@ -23,7 +23,15 @@ import {
   type CountyRiskListItem,
   type RunRecord,
 } from "@/lib/db/queries/tenders";
-import { closingLabel, confidenceLabel, formatWhen, matchCountyName, RISK_LABEL, sentenceCase } from "@/lib/format/display";
+import {
+  closingLabel,
+  confidenceLabel,
+  countyScoreReason,
+  formatWhen,
+  matchCountyName,
+  RISK_LABEL,
+  sentenceCase,
+} from "@/lib/format/display";
 import { presentLeadCopy, sourceLabel } from "@/lib/leads/public-names";
 import { FIELD_STATUSES } from "@/lib/db/vocab";
 import { isWithdrawnByAddendum, matchRequirements } from "@/lib/readiness/match";
@@ -409,6 +417,7 @@ function PaymentCard({ risk }: { risk: CountyRiskListItem | undefined }) {
               </div>
               <span className="text-3xl font-semibold tabular-nums">{risk.score.toFixed(1)}</span>
             </div>
+            <p>{countyScoreReason(risk)}</p>
             <p className="text-muted-foreground">
               Controller of Budget, as at {formatWhen(risk.asOf) ?? risk.asOf}. Confidence:{" "}
               {confidenceLabel(risk.confidence)}.
@@ -417,6 +426,9 @@ function PaymentCard({ risk }: { risk: CountyRiskListItem | undefined }) {
         ) : (
           <p className="text-muted-foreground">No county score for this buyer.</p>
         )}
+        <Link href="/counties" className="text-sm text-primary underline-offset-4 hover:underline">
+          See all counties
+        </Link>
       </CardContent>
     </Card>
   );

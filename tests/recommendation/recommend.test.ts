@@ -16,6 +16,8 @@ function item(
     rationale: "",
     selfDeclared: false,
     disqualifying: partial.match === "missing",
+    onChecklist: false,
+    unlisted: false,
     ...partial,
   };
 }

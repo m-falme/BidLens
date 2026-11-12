@@ -1,6 +1,6 @@
 import "server-only";
 
-import { COMPANY_PAPERS, type DocumentHolding } from "@/lib/company/papers";
+import { COMPANY_PAPERS, documentNameFromRequirement, type DocumentHolding, type PaperGroup } from "@/lib/company/papers";
 import { DOCUMENT_HOLDINGS } from "@/lib/db/vocab";
 
 import { getServiceClient } from "../supabase-server";
@@ -10,15 +10,25 @@ function fail(context: string, error: { message: string } | null): never {
   throw new Error(`${context}: ${error?.message ?? "unknown error"}`);
 }
 
+export interface DocumentUse {
+  tenderId: string;
+  tenderTitle: string;
+  requirement: string;
+}
+
 export interface CompanyDocument {
   id: string;
   name: string;
-  group: "registration" | "licence";
+  group: PaperGroup;
   holding: DocumentHolding;
   selfDeclared: boolean;
   expiresOn: string | null;
+  /** Ticked "Does not expire". No date is stored. */
+  neverExpires: boolean;
   /** The status before the first edit. Null until someone changes it. */
   originalHolding: DocumentHolding | null;
+  /** Requirements this paper satisfied (match met), across tenders. */
+  uses: DocumentUse[];
 }
 
 export interface CompanyProfile {
@@ -51,30 +61,31 @@ export async function getDemoCompanyProfile(): Promise<CompanyProfile> {
     .single();
   if (error) fail("load company", error);
 
-  const { data, error: docsError } = await db
-    .from("capabilities")
-    .select("id, name, kind, holding, self_declared, expires_on, original_holding")
-    .eq("company_id", companyId)
-    .in("kind", ["document", "certification"]);
+  const [{ data, error: docsError }, uses] = await Promise.all([
+    db
+      .from("capabilities")
+      .select("id, name, kind, holding, self_declared, expires_on, never_expires, original_holding")
+      .eq("company_id", companyId)
+      .in("kind", ["document", "certification"]),
+    listDocumentUses(companyId),
+  ]);
   if (docsError) fail("load company documents", docsError);
 
   const byName = new Map(data.map((row) => [row.name, row]));
-  const documents = COMPANY_PAPERS.flatMap((paper) => {
+  const listed = new Set(COMPANY_PAPERS.map((paper) => paper.name));
+  const fromCatalog = COMPANY_PAPERS.flatMap((paper) => {
     const row = byName.get(paper.name);
     const holding = asHolding(row?.holding ?? null);
     if (!row || !holding) return [];
-    return [
-      {
-        id: row.id,
-        name: row.name,
-        group: paper.group,
-        holding,
-        selfDeclared: row.self_declared,
-        expiresOn: row.expires_on,
-        originalHolding: asHolding(row.original_holding),
-      },
-    ];
+    return [toDocument(row, paper.group, uses.get(row.id) ?? [])];
   });
+  const other = data.flatMap((row) => {
+    if (listed.has(row.name)) return [];
+    const holding = asHolding(row.holding);
+    if (!holding) return [];
+    return [toDocument(row, "other", uses.get(row.id) ?? [])];
+  });
+  const documents = [...fromCatalog, ...other];
 
   const profile = company.profile_json;
   const legalName =
@@ -85,11 +96,61 @@ export async function getDemoCompanyProfile(): Promise<CompanyProfile> {
   return { name: company.name, legalName, documents };
 }
 
+type DocumentRow = {
+  id: string;
+  name: string;
+  holding: string | null;
+  self_declared: boolean;
+  expires_on: string | null;
+  never_expires: boolean;
+  original_holding: string | null;
+};
+
+function toDocument(row: DocumentRow, group: PaperGroup, uses: DocumentUse[]): CompanyDocument {
+  const holding = asHolding(row.holding);
+  if (!holding) throw new Error("toDocument requires a holding");
+  return {
+    id: row.id,
+    name: row.name,
+    group,
+    holding,
+    selfDeclared: row.self_declared,
+    expiresOn: row.expires_on,
+    neverExpires: row.never_expires,
+    originalHolding: asHolding(row.original_holding),
+    uses,
+  };
+}
+
+async function listDocumentUses(companyId: string): Promise<Map<string, DocumentUse[]>> {
+  const { data, error } = await getServiceClient()
+    .from("requirements")
+    .select("capability_id, text, opportunities!inner(id, title, company_id)")
+    .eq("match", "met")
+    .eq("opportunities.company_id", companyId);
+  if (error) fail("load document use", error);
+  const uses = new Map<string, DocumentUse[]>();
+  const seen = new Set<string>();
+  for (const row of data) {
+    if (!row.capability_id) continue;
+    const tender = Array.isArray(row.opportunities) ? row.opportunities[0] : row.opportunities;
+    if (!tender) continue;
+    const key = `${row.capability_id}:${tender.id}:${row.text}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const list = uses.get(row.capability_id) ?? [];
+    list.push({ tenderId: tender.id, tenderTitle: tender.title, requirement: row.text });
+    uses.set(row.capability_id, list);
+  }
+  return uses;
+}
+
 /** The team sets Have / Don't have / Expired. The previous status is kept by the database. */
 export async function updateCompanyDocument(
   id: string,
   holding: DocumentHolding,
   expiresOn: string | null,
+  neverExpires: boolean,
 ): Promise<void> {
   const companyId = await getDemoCompanyId();
   const db = getServiceClient();
@@ -108,10 +169,44 @@ export async function updateCompanyDocument(
     .from("capabilities")
     .update({
       holding,
-      expires_on: holding === "dont_have" ? null : expiresOn,
+      never_expires: neverExpires,
+      expires_on: holding === "dont_have" || neverExpires ? null : expiresOn,
       // A Have with no checked file stays a self-declaration.
       self_declared: holding === "have" ? !row.verified : false,
     })
     .eq("id", id);
   if (error) fail("save document", error);
+}
+
+/** Adds a tender requirement that is not on the checklist yet. Status is Don't have. */
+export async function insertOtherDocument(requirement: string): Promise<void> {
+  const companyId = await getDemoCompanyId();
+  const db = getServiceClient();
+  const name = documentNameFromRequirement(requirement);
+  const { data: existing, error: loadError } = await db
+    .from("capabilities")
+    .select("id")
+    .eq("company_id", companyId)
+    .eq("kind", "document")
+    .eq("name", name)
+    .maybeSingle();
+  if (loadError) fail("load document", loadError);
+  if (existing) return;
+
+  const { error } = await db.from("capabilities").insert({
+    company_id: companyId,
+    kind: "document",
+    name,
+    detail: requirement.replace(/\s+/g, " ").trim(),
+    evidence_ref: "Added from a tender requirement",
+    verified: false,
+    holding: "dont_have",
+    expires_on: null,
+    self_declared: false,
+    never_expires: false,
+  });
+  if (error) {
+    if (error.code === "23505") return;
+    fail("add document", error);
+  }
 }

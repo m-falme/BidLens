@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { holdingLabel } from "@/lib/company/papers";
 import type { CompanyDocument } from "@/lib/db/queries/company";
 import { DOCUMENT_HOLDINGS, type DocumentHolding } from "@/lib/db/vocab";
+import { sentenceCase } from "@/lib/format/display";
 import { cn } from "@/lib/utils";
 
 import { saveCompanyDocument } from "./actions";
@@ -32,15 +34,25 @@ export function DocumentChecklist({ documents }: { documents: readonly CompanyDo
   );
 }
 
+function tenderCount(document: CompanyDocument): number {
+  return new Set(document.uses.map((use) => use.tenderId)).size;
+}
+
 function DocumentRow({ document }: { document: CompanyDocument }) {
   const [holding, setHolding] = useState<DocumentHolding>(document.holding);
   const [expiresOn, setExpiresOn] = useState(document.expiresOn ?? "");
+  const [neverExpires, setNeverExpires] = useState(document.neverExpires);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
-  const dirty = holding !== document.holding || (holding === "dont_have" ? false : expiresOn !== (document.expiresOn ?? ""));
+  const dateValue = neverExpires || holding === "dont_have" ? "" : expiresOn;
+  const dirty =
+    holding !== document.holding ||
+    neverExpires !== document.neverExpires ||
+    dateValue !== (document.neverExpires || document.holding === "dont_have" ? "" : (document.expiresOn ?? ""));
   const shown = holdingLabel(document.holding, document.selfDeclared);
+  const usedIn = tenderCount(document);
 
   function save() {
     setError(null);
@@ -49,7 +61,8 @@ function DocumentRow({ document }: { document: CompanyDocument }) {
       const result = await saveCompanyDocument({
         id: document.id,
         holding,
-        expiresOn: holding === "dont_have" ? "" : expiresOn,
+        neverExpires,
+        expiresOn: dateValue,
       });
       if (!result.ok) {
         setError(result.error);
@@ -61,7 +74,10 @@ function DocumentRow({ document }: { document: CompanyDocument }) {
   }
 
   return (
-    <li className="grid gap-3 rounded-lg border px-4 py-3 md:grid-cols-[minmax(0,1.4fr)_12rem_11rem_auto] md:items-center">
+    <li
+      id={`doc-${document.id}`}
+      className="grid scroll-mt-24 gap-3 rounded-lg border px-4 py-3 md:grid-cols-[minmax(0,1.4fr)_12rem_14rem_auto] md:items-start"
+    >
       <div className="min-w-0">
         <p className="font-medium">{document.name}</p>
         <p className={cn("text-sm", document.holding === "have" ? "text-green-700" : "text-muted-foreground")}>
@@ -70,6 +86,24 @@ function DocumentRow({ document }: { document: CompanyDocument }) {
             ? ` · was ${wasLabel(document.originalHolding)}`
             : ""}
         </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {`Used in ${usedIn} ${usedIn === 1 ? "tender" : "tenders"}`}
+        </p>
+        {document.uses.length > 0 && (
+          <ul className="mt-1 flex flex-col gap-1 text-sm">
+            {document.uses.map((use, index) => (
+              <li key={`${use.tenderId}-${index}`}>
+                <Link
+                  href={`/tenders/${use.tenderId}#can_comply`}
+                  className="font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  {sentenceCase(use.tenderTitle)}
+                </Link>
+                <span className="text-muted-foreground">: {use.requirement}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       <label className="flex flex-col gap-1 text-sm">
         <span className="text-muted-foreground">Status</span>
@@ -91,19 +125,34 @@ function DocumentRow({ document }: { document: CompanyDocument }) {
           ))}
         </select>
       </label>
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="text-muted-foreground">Expiry date</span>
-        <input
-          type="date"
-          className="h-9 rounded-lg border border-input bg-transparent px-2.5 disabled:opacity-50"
-          value={holding === "dont_have" ? "" : expiresOn}
-          disabled={holding === "dont_have"}
-          onChange={(event) => {
-            setExpiresOn(event.target.value);
-            setSaved(false);
-          }}
-        />
-      </label>
+      <div className="flex flex-col gap-2 text-sm">
+        <label className="flex flex-col gap-1">
+          <span className="text-muted-foreground">Expiry date</span>
+          <input
+            type="date"
+            className="h-9 rounded-lg border border-input bg-transparent px-2.5 disabled:opacity-50"
+            value={dateValue}
+            disabled={holding === "dont_have" || neverExpires}
+            onChange={(event) => {
+              setExpiresOn(event.target.value);
+              setSaved(false);
+            }}
+          />
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            className="size-4 accent-primary"
+            checked={neverExpires}
+            onChange={(event) => {
+              setNeverExpires(event.target.checked);
+              if (event.target.checked) setExpiresOn("");
+              setSaved(false);
+            }}
+          />
+          Does not expire
+        </label>
+      </div>
       <div className="flex flex-col items-start gap-1">
         <button
           type="button"

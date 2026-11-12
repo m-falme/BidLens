@@ -76,7 +76,8 @@ export const NAV = {
   },
 } as const satisfies Record<string, NavItem>;
 
-export const NAV_ITEMS: readonly NavItem[] = Object.values(NAV);
+/** Counties stays a working page. It is linked from a tender, not listed in the sidebar. */
+export const NAV_ITEMS: readonly NavItem[] = [NAV.overview, NAV.company, NAV.leads, NAV.tenders, NAV.proposals];
 
 export function isNavItemActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";

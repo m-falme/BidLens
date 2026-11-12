@@ -1,7 +1,43 @@
+import Link from "next/link";
+
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { readinessLabel, type ReadinessMatch, type ReadinessResult } from "@/lib/readiness/match";
 import { cn } from "@/lib/utils";
+
+import { AddDocumentButton } from "./add-document-button";
+
+function DocumentLinks({ items }: { items: ReadinessResult["items"] }) {
+  const linked = items.filter(
+    (item) => item.match === "met" && item.onChecklist && item.capabilityId && item.capabilityName,
+  );
+  const unlisted = items.filter((item) => item.unlisted);
+  if (linked.length === 0 && unlisted.length === 0) return null;
+  return (
+    <ul className="flex flex-col gap-3">
+      {linked.map((item) => (
+        <li key={`met-${item.capabilityId}-${item.text}`} className="flex flex-col gap-1">
+          <Link
+            href={`/company#doc-${item.capabilityId}`}
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Met: you have {item.capabilityName}
+          </Link>
+          <span className="text-muted-foreground">{item.text}</span>
+        </li>
+      ))}
+      {unlisted.map((item) => (
+        <li key={`new-${item.text}`} className="flex flex-col gap-2 rounded-lg border px-4 py-3">
+          <span>{item.text}</span>
+          <span className="font-medium text-red-700 dark:text-red-400">
+            New requirement: not in your documents yet
+          </span>
+          <AddDocumentButton requirement={item.text} />
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 const MATCH_CLASS: Record<ReadinessMatch, string> = {
   met: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300",
@@ -64,7 +100,9 @@ export function ReadinessCard({
         {result.items.length === 0 ? (
           <p className="text-muted-foreground">No mandatory requirements were extracted from this tender.</p>
         ) : (
-          <details className="rounded-lg border">
+          <>
+            <DocumentLinks items={result.items} />
+            <details className="rounded-lg border">
             <summary className="cursor-pointer px-4 py-3 font-semibold">
               All {result.items.length} mandatory requirements
             </summary>
@@ -73,15 +111,32 @@ export function ReadinessCard({
                   <li key={`${item.pageNo ?? "x"}-${item.text}`} className="rounded-lg border">
                     <details>
                       <summary className="flex cursor-pointer flex-wrap items-start gap-2 px-3 py-2">
-                        <Badge className={cn("mt-0.5 h-6 shrink-0 px-2.5", MATCH_CLASS[item.match])}>
-                          {readinessLabel(item)}
-                        </Badge>
-                        <span className="min-w-0 flex-1 break-words">{item.text}</span>
+                        {item.unlisted ? (
+                          <span className="mt-0.5 inline-flex shrink-0 items-center rounded-md bg-red-100 px-2.5 py-0.5 text-sm font-medium text-red-800 dark:bg-red-950 dark:text-red-300">
+                            New requirement: not in your documents yet
+                          </span>
+                        ) : (
+                          <Badge className={cn("mt-0.5 h-6 shrink-0 px-2.5", MATCH_CLASS[item.match])}>
+                            {readinessLabel(item)}
+                          </Badge>
+                        )}
+                        <span className="min-w-0 flex-1 break-words">
+                          <span className="block">{item.text}</span>
+                          {item.match === "met" && item.onChecklist && item.capabilityId && item.capabilityName && (
+                            <Link
+                              href={`/company#doc-${item.capabilityId}`}
+                              className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                            >
+                              Met: you have {item.capabilityName}
+                            </Link>
+                          )}
+                        </span>
                         <span className="shrink-0 text-muted-foreground tabular-nums">
                           {item.pageNo ? `p.${item.pageNo}` : "no page"}
                         </span>
                       </summary>
                       <div className="flex flex-col gap-2 px-3 pb-3">
+                        {item.unlisted && <AddDocumentButton requirement={item.text} />}
                         <p>{item.rationale}</p>
                         {item.capabilityName && (
                           <p className="text-muted-foreground">
@@ -100,6 +155,7 @@ export function ReadinessCard({
               ))}
             </ul>
           </details>
+          </>
         )}
       </CardContent>
     </Card>

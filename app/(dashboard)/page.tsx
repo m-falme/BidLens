@@ -13,26 +13,43 @@ import { sentenceCase } from "@/lib/format/display";
 
 export const metadata: Metadata = { title: NAV.overview.title };
 
-const HOME_ACTIONS: readonly { href: string; title: string; summary: string; icon: LucideIcon }[] = [
+const HOME_ACTIONS: readonly {
+  key: "analyse" | "comply" | "viability";
+  href: string;
+  title: string;
+  summary: string;
+  icon: LucideIcon;
+}[] = [
   {
+    key: "analyse",
     href: "/tenders/new",
     title: "Analyse Tender",
     summary: "Extracts and explains key tender requirements.",
     icon: FileSearch,
   },
   {
+    key: "comply",
     href: "/company",
     title: "Check Compliance",
     summary: "Checks eligibility, highlights gaps and risks.",
     icon: ShieldCheck,
   },
   {
-    href: "/counties",
+    key: "viability",
+    href: "/tenders",
     title: "Assess Viability",
     summary: "Assesses viability and potential financial strain, like delayed payments.",
     icon: BarChart3,
   },
 ];
+
+function homeActions(latestTenderId: string | null) {
+  return HOME_ACTIONS.map((action) =>
+    action.key === "viability" && latestTenderId
+      ? { ...action, href: `/tenders/${latestTenderId}#should_bid` }
+      : action,
+  );
+}
 
 async function OverviewBody() {
   await connection();
@@ -41,6 +58,7 @@ async function OverviewBody() {
   const proceeded = uploaded.filter((tender) => tender.finalLabel === "proceed_to_preparation").length;
   const needsHuman = uploaded.reduce((sum, tender) => sum + tender.needsHuman, 0);
   const latest = uploaded.slice(0, 4);
+  const actions = homeActions(uploaded[0]?.id ?? null);
   const stats = [
     { label: "Tenders reviewed", value: String(uploaded.length), note: "Uploaded tender documents" },
     { label: "Decided to proceed", value: String(proceeded), note: "Latest decision is Proceed to preparation" },
@@ -50,6 +68,21 @@ async function OverviewBody() {
 
   return (
     <>
+      <div className="grid gap-4 md:grid-cols-3">
+        {actions.map((action) => (
+          <Link
+            key={action.key}
+            href={action.href}
+            className="flex h-full flex-col gap-4 rounded-2xl border bg-card p-6 shadow-sm transition hover:border-primary/40 hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            <span className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <action.icon className="size-6" aria-hidden />
+            </span>
+            <span className="text-xl font-semibold">{action.title}</span>
+            <span className="text-muted-foreground">{action.summary}</span>
+          </Link>
+        ))}
+      </div>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
           <Card key={stat.label}>
@@ -104,27 +137,19 @@ export default function OverviewPage() {
           Hello! How can I support your tender assessment today?
         </h1>
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        {HOME_ACTIONS.map((action) => (
-          <Link
-            key={action.href}
-            href={action.href}
-            className="flex h-full flex-col gap-4 rounded-2xl border bg-card p-6 shadow-sm transition hover:border-primary/40 hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-          >
-            <span className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-              <action.icon className="size-6" aria-hidden />
-            </span>
-            <span className="text-xl font-semibold">{action.title}</span>
-            <span className="text-muted-foreground">{action.summary}</span>
-          </Link>
-        ))}
-      </div>
       <Suspense
         fallback={
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {Array.from({ length: 4 }, (_, index) => (
-              <Skeleton key={index} className="h-32 w-full" />
-            ))}
+          <div className="flex flex-col gap-8">
+            <div className="grid gap-4 md:grid-cols-3">
+              {Array.from({ length: 3 }, (_, index) => (
+                <Skeleton key={index} className="h-40 w-full" />
+              ))}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {Array.from({ length: 4 }, (_, index) => (
+                <Skeleton key={index} className="h-32 w-full" />
+              ))}
+            </div>
           </div>
         }
       >

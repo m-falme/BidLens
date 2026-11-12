@@ -144,6 +144,16 @@ export interface CountyRiskListItem {
   score: number | null;
   confidence: string;
   asOf: string;
+  reason: string | null;
+  partA: number | null;
+  partB: number | null;
+  partC: number | null;
+}
+
+function asPart(value: number | null): number | null {
+  if (value === null || value === undefined) return null;
+  const part = Number(value);
+  return Number.isFinite(part) ? part : null;
 }
 
 export async function getLatestDecision(opportunityId: string): Promise<DecisionChoice | null> {
@@ -179,7 +189,7 @@ export async function saveTenderFigures(input: {
 export async function listCountyRisk(): Promise<CountyRiskListItem[]> {
   const { data, error } = await getServiceClient()
     .from("county_risk")
-    .select("county, band, score, confidence, as_of")
+    .select("county, band, score, confidence, as_of, reason, part_a, part_b, part_c")
     .order("county");
   if (error) fail("list county risk", error);
   return data.flatMap((row) => {
@@ -192,6 +202,10 @@ export async function listCountyRisk(): Promise<CountyRiskListItem[]> {
         score: row.score === null ? null : Number(row.score),
         confidence: row.confidence,
         asOf: row.as_of,
+        reason: row.reason,
+        partA: asPart(row.part_a),
+        partB: asPart(row.part_b),
+        partC: asPart(row.part_c),
       },
     ];
   });

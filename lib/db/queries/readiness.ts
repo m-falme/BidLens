@@ -17,7 +17,7 @@ export async function listDemoCapabilities(): Promise<ProfileCapability[]> {
   const companyId = await getDemoCompanyId();
   const { data, error } = await getServiceClient()
     .from("capabilities")
-    .select("id, kind, name, detail, evidence_ref, holding, self_declared, expires_on")
+    .select("id, kind, name, detail, evidence_ref, holding, self_declared, expires_on, never_expires")
     .eq("company_id", companyId);
   if (error) fail("load capabilities", error);
   return data.flatMap((row) => {
@@ -32,6 +32,7 @@ export async function listDemoCapabilities(): Promise<ProfileCapability[]> {
         holding: row.holding && HOLDINGS.has(row.holding) ? (row.holding as DocumentHolding) : null,
         selfDeclared: row.self_declared,
         expiresOn: row.expires_on,
+        neverExpires: row.never_expires,
       },
     ];
   });

@@ -101,6 +101,7 @@ export type Database = {
           id: string
           kind: string
           name: string
+          never_expires: boolean
           original_holding: string | null
           self_declared: boolean
           updated_at: string
@@ -116,6 +117,7 @@ export type Database = {
           id?: string
           kind: string
           name: string
+          never_expires?: boolean
           original_holding?: string | null
           self_declared?: boolean
           updated_at?: string
@@ -131,6 +133,7 @@ export type Database = {
           id?: string
           kind?: string
           name?: string
+          never_expires?: boolean
           original_holding?: string | null
           self_declared?: boolean
           updated_at?: string

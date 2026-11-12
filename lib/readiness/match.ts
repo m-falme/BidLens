@@ -1,12 +1,13 @@
-import { COMPANY_PAPERS, type DocumentHolding } from "@/lib/company/papers";
+import { COMPANY_PAPERS, documentIsExpired, type DocumentHolding } from "@/lib/company/papers";
 import type { CapabilityKind } from "@/lib/db/vocab";
 
 /**
  * Match tender requirements to company capabilities. Code only.
  * A requirement is `met` only when it points at a capability in the list passed in.
  * Certificates, licences and past contracts are never marked met from a service or a tool.
- * A paper marked Don't have or Expired is not met. Have (self-declared) is the team's mark,
- * not a file that was checked. Forms to fill and sign are `to_prepare`, not gaps.
+ * A paper marked Don't have or Expired is not met. A Have with no date is still met.
+ * A Have counts as expired only when its date is before today. Have (self-declared) is the
+ * team's mark, not a file that was checked. Forms to fill and sign are `to_prepare`, not gaps.
  */
 
 export interface ProfileCapability {
@@ -19,8 +20,10 @@ export interface ProfileCapability {
   holding?: DocumentHolding | null;
   /** True when Have was declared by the team, not read from a file. */
   selfDeclared?: boolean;
-  /** ISO date. A Have whose date is before `asOf` is treated as expired. */
+  /** ISO date. A Have whose date is before `asOf` is treated as expired. No date is not expired. */
   expiresOn?: string | null;
+  /** Ticked "Does not expire". A blank date is not an expiry. */
+  neverExpires?: boolean;
 }
 
 export interface RequirementInput {
@@ -47,6 +50,10 @@ export interface MatchedRequirement {
   selfDeclared: boolean;
   /** A missing mandatory proof. Counts as "could disqualify us". */
   disqualifying: boolean;
+  /** Met from a company document or certification, so the screen can link to it. */
+  onChecklist: boolean;
+  /** The tender asks for a document that is not on the company list yet. */
+  unlisted: boolean;
 }
 
 export interface ReadinessResult {
@@ -124,12 +131,13 @@ function phraseIn(haystack: string, name: string): boolean {
 /** A paper the team does not currently hold cannot satisfy a requirement. Null holding (services) can. */
 function isHeld(capability: ProfileCapability, asOf: string): boolean {
   if (capability.holding === "dont_have" || capability.holding === "expired") return false;
-  if (capability.expiresOn && capability.expiresOn < asOf) return false;
+  if (capability.neverExpires) return true;
+  if (documentIsExpired(capability.expiresOn, asOf)) return false;
   return true;
 }
 
 function holdingWords(capability: ProfileCapability, asOf: string): "Expired" | "Don't have" {
-  if (capability.holding === "expired" || (capability.expiresOn && capability.expiresOn < asOf)) return "Expired";
+  if (capability.holding === "expired" || documentIsExpired(capability.expiresOn, asOf)) return "Expired";
   return "Don't have";
 }
 
@@ -139,8 +147,11 @@ function findCapability(
   capabilities: readonly ProfileCapability[],
   kinds: ReadonlySet<string>,
   asOf: string,
+  includeUnheld = false,
 ): ProfileCapability | null {
-  const allowed = capabilities.filter((capability) => kinds.has(capability.kind) && isHeld(capability, asOf));
+  const allowed = capabilities.filter(
+    (capability) => kinds.has(capability.kind) && (includeUnheld || isHeld(capability, asOf)),
+  );
   const phrase = allowed.find((capability) => phraseIn(text, capability.name));
   if (phrase) return phrase;
 
@@ -194,10 +205,12 @@ function met(requirement: RequirementInput, capability: ProfileCapability, voice
       ? `${voice.actor} has marked "${capability.name}" as Have (self-declared). The file has not been checked.${ids}`
       : `Matches "${capability.name}" in ${voice.profile}${where}.`,
     disqualifying: false,
+    onChecklist: capability.kind === "document" || capability.kind === "certification",
+    unlisted: false,
   };
 }
 
-function missing(requirement: RequirementInput, rationale: string): MatchedRequirement {
+function missing(requirement: RequirementInput, rationale: string, unlisted = false): MatchedRequirement {
   return {
     text: requirement.text,
     category: requirement.category,
@@ -210,6 +223,8 @@ function missing(requirement: RequirementInput, rationale: string): MatchedRequi
     rationale,
     selfDeclared: false,
     disqualifying: requirement.category === "mandatory",
+    onChecklist: false,
+    unlisted,
   };
 }
 
@@ -226,6 +241,8 @@ function unclear(requirement: RequirementInput, rationale: string): MatchedRequi
     selfDeclared: false,
     rationale,
     disqualifying: false,
+    onChecklist: false,
+    unlisted: false,
   };
 }
 
@@ -242,6 +259,8 @@ function toPrepare(requirement: RequirementInput, rationale: string): MatchedReq
     selfDeclared: false,
     rationale,
     disqualifying: false,
+    onChecklist: false,
+    unlisted: false,
   };
 }
 
@@ -275,9 +294,19 @@ function matchOne(
   if (HELD_PROOF.test(text)) {
     const capability = findCapability(text, capabilities, PROOF_KINDS, asOf);
     if (capability) return met(requirement, capability, voice);
+    const listed = findCapability(text, capabilities, new Set(["document", "certification"]), asOf, true);
+    if (listed && isHeld(listed, asOf)) return met(requirement, listed, voice);
+    if (listed) {
+      return missing(
+        requirement,
+        `${voice.actor} has marked "${listed.name}" as ${holdingWords(listed, asOf)}. It is not met.`,
+      );
+    }
+    const knownPaper = COMPANY_PAPERS.some((item) => item.pattern.test(text));
     return missing(
       requirement,
       `${cap(voice.profile)} has no certificate, licence or document that covers this. It is not marked met.`,
+      !knownPaper,
     );
   }
 

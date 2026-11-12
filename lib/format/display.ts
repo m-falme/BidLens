@@ -41,6 +41,26 @@ const CONFIDENCE_LABEL: Record<string, string> = {
   unknown: "Not scored",
 };
 
+function formatPart(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+/** One line under the county band and score. Parts explain the score. A blank score uses the stored note. */
+export function countyScoreReason(input: {
+  score: number | null;
+  reason: string | null;
+  partA: number | null;
+  partB: number | null;
+  partC: number | null;
+}): string {
+  if (input.score !== null && input.partA !== null && input.partB !== null && input.partC !== null) {
+    return `Ageing ${formatPart(input.partA)}, size ${formatPart(input.partB)}, trend ${formatPart(input.partC)}.`;
+  }
+  const note = input.reason?.replace(/\s+/g, " ").trim();
+  if (note) return note;
+  return "Not enough Controller of Budget data to score this county.";
+}
+
 export function confidenceLabel(value: string | null): string {
   if (!value) return "Not scored";
   return CONFIDENCE_LABEL[value] ?? "Not scored";

@@ -69,8 +69,8 @@ All tables have `id uuid pk default gen_random_uuid()`, `created_at timestamptz 
 | `source_pages` | source_id, page_no, text, is_scanned | Page text for citations and the quote check |
 | `fields` | opportunity_id, key, value, original_value, source_id, page_no, quote, confidence numeric, status (`source_confirmed`/`ai_inferred`/`blank_in_source`/`needs_human`), edited_by, edited_at | One row per extracted field |
 | `requirements` | opportunity_id, text, category (`mandatory`/`technical`/`financial`/`contractual`), page_no, quote, match (`met`/`missing`/`unclear`), capability_id null, rationale | Readiness |
-| `county_pending_bills` | county, report_date, pending_total_kes_m, budget_kes_m, pct_over_2y, pct_over_3y, trend_pct, data_quality, source | From CoB CSVs |
-| `county_risk` | county, score, band, confidence, part_a, part_b, part_c, reason, as_of | Computed by `lib/risk/county-score.ts`, stored for the dashboard |
+| `county_pending_bills` | county, report_date, pending_total_kes_m, budget_kes_m, age_* buckets, ageing_total_kes_m, pct_over_2y, pct_over_3y, trend_pct, data_quality (`ok`/`flagged`/`not_disclosed`), data_notes, source, source_url, retrieved_at | From CoB CSVs (Jun 2025 + Jun 2026) |
+| `county_risk` | county, pending_bills_id, score, band, confidence, part_a, part_b, part_c, reason, as_of | Computed by `lib/risk/county-score.ts`, stored for the dashboard |
 | `risk_assessments` | opportunity_id, inputs_json (V, m, r, adv, f, s, ir), scenarios_json, breakeven_days, price_to_keep_margin_json, clause_flags_json, recommendation, reasons_json | One per run; keep history |
 | `decisions` | opportunity_id, choice (`bid`/`bid_higher`/`ask_advance`/`skip`), note, decided_by, snapshot_json | Human decision log |
 | `proposals` | opportunity_id, version int, brief_md, draft_md, status (`draft`/`in_review`/`approved`), placeholders_json | Editable, versioned |
@@ -110,9 +110,10 @@ Requirements + capabilities → LLM proposes a match per requirement with `capab
   P = V·m;  C = V·(1−m);  F = max(0, C − adv·V)·f
   financing = F·r·D/365;  recovered = F·ir·D/365
   net = P − financing + recovered − s;  margin = net / V
-  breakeven_days = (P − s) / (F·r/365)
-  price_to_keep_margin(D) = (C + financing + s) / (1 − m)
+  breakeven_days = (P − s) / (F·(r − ir)/365)          # = (P − s)/(F·r/365) when ir = 0
+  price_to_keep_margin(D) = (C + financing − recovered + s) / (1 − m)
   ```
+  (`ir` is netted so break-even agrees with `net`; identical to the original formulas when ir = 0.)
   Test case: V=8,000,000, m=0.14, r=0.16, adv=0 → D=60 net≈939,047; D=365 net≈19,200; D=730 net≈−1,081,600; breakeven≈371 days; price@365≈9,280,000. With adv=0.2 → breakeven≈484 days.
 - `clauses.ts`: flags `interest_rate_blank`, `payment_days_blank`, `advance_absent`, `deadline_mismatch` (doc vs portal), `addendum_conflict`, `performance_security_blank`.
 - `recommend.ts` (rules, thresholds are user settings, defaults shown):

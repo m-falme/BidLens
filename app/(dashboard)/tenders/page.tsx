@@ -46,7 +46,7 @@ function TenderRows({ items }: { items: TenderListItem[] }) {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 md:justify-end">
-              <DecisionBadge choice={tender.decision} />
+              <DecisionBadge label={tender.finalLabel} />
               <RiskBadge band={tender.riskBand} />
             </div>
           </li>

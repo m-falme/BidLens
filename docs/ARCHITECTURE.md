@@ -41,6 +41,7 @@ lib/
     client.ts               # provider selection, retries, logging
     prompts/                # extract-tender.v1.ts (versioned TS modules, not markdown files)
     schemas.ts              # zod schemas for every LLM output
+  recommendation/ recommend.ts, profit.ts, deadline.ts, decision.ts, trail.ts
   pdf/          parse.ts (unpdf → pages[]), ocr.ts
   retrieval/    bm25.ts
   verify/       quote-check.ts
@@ -64,7 +65,7 @@ All tables have `id uuid pk default gen_random_uuid()`, `created_at timestamptz 
 |---|---|---|
 | `companies` | name, profile_json | One seeded row: Zanari Analytics |
 | `capabilities` | company_id, kind (`service`/`tool`/`document`/`certification`/`experience`/`sector`), name, detail, evidence_ref, verified bool, holding (`have`/`dont_have`/`expired`, papers only), expires_on, self_declared, original_holding | From the profile, plus the company-documents checklist. `met` must link here. A self-declared Have is the team's mark, not a checked file. The first holding edit is kept in `original_holding`. |
-| `opportunities` | company_id, type (`procurement`/`field`), title, organization, location, sector, reference, deadline_at, submission_method, source_platform, source_url, retrieved_at, status (Zanari glossary), owner, next_action, follow_up_on, readiness_pct, buyer_county | The shared opportunity record for both options |
+| `opportunities` | company_id, type (`procurement`/`field`), title, organization, location, sector, reference, deadline_at, submission_method, source_platform, source_url, retrieved_at, status (Zanari glossary), owner, next_action, follow_up_on, readiness_pct, buyer_county, contract_value_kes, delivery_cost_kes | The shared opportunity record. The two money columns stay null until someone enters them |
 | `sources` | opportunity_id, kind (`pdf`/`text`/`image`/`audio`/`form`/`email`), role (`main`/`addendum`), storage_path, original_name, sha256, raw_text | Originals are never overwritten. An addendum is another source on the same opportunity |
 | `source_pages` | source_id, page_no, text, is_scanned | Page text for citations and the quote check |
 | `fields` | opportunity_id, key, ordinal, value, original_value, source_id, page_no, quote, confidence numeric, status (`source_confirmed`/`ai_inferred`/`blank_in_source`/`needs_human`), extraction_run_id, affects_key, edited_by, edited_at | One row per extracted value. `ordinal` orders list items. `affects_key` is set on addendum changes |
@@ -74,12 +75,13 @@ All tables have `id uuid pk default gen_random_uuid()`, `created_at timestamptz 
 | `risk_assessments` | opportunity_id, inputs_json (V, m, r, adv, f, s, ir), scenarios_json, breakeven_days, price_to_keep_margin_json, clause_flags_json, recommendation, reasons_json | One per run; keep history |
 | `decisions` | opportunity_id, choice (`bid`/`bid_higher`/`ask_advance`/`skip`), note, decided_by, snapshot_json | Human decision log |
 | `stage_reviews` | tender_id, stage (`can_bid`/`can_comply`/`should_bid`), reviewer_name, note | Insert-only review of each assessment step. The start of the decision trail. |
+| `bid_decisions` | tender_id, recommended_label, final_label, action (`approve`/`override`), reason, reviewer_name | Insert-only. The latest `final_label` is the decision on the tender and on the list. |
 | `proposals` | opportunity_id, version int, brief_md, draft_md, status (`draft`/`in_review`/`approved`), placeholders_json | Editable, versioned |
 | `activities` | opportunity_id, kind (`status_change`/`note`/`edit`/`duplicate_flag`), payload_json, actor | Audit trail and pipeline history |
 | `duplicate_candidates` | opportunity_id, candidate_id, score, reasons_json, resolution (`open`/`not_duplicate`/`same`) | Never auto-merge |
 | `extraction_runs` | source_id, provider, model, prompt_version, status (`running`/`succeeded`/`failed`), error, stats_json, finished_at | One log row per extraction. At most one running or succeeded run per source |
 
-RLS: on for all tables. The app uses the service role on the server only; the browser reads through server components/actions. `stage_reviews` is insert-only (triggers refuse update and delete).
+RLS: on for all tables. The app uses the service role on the server only; the browser reads through server components/actions. `stage_reviews` and `bid_decisions` are insert-only (triggers refuse update and delete).
 
 ## 5. Pipelines
 ### 5.1 Tender extraction (`POST /api/tenders/:id/extract`)
@@ -125,6 +127,7 @@ Requirements + capabilities → LLM proposes a match per requirement with `capab
   - **Bid at higher price:** margin < floor at the band scenario but `price_to_keep_margin` increase ≤ 20%.
   - **Bid:** otherwise.
   - Output: choice + reasons[] + clarification questions[] (from clause flags). An LLM may **phrase** the reasons; it may not change the choice.
+- The screen uses `lib/recommendation/recommend.ts` (no model call). Rules, first match wins: **Consider declining** (a could-disqualify item that cannot be fixed before the deadline, or Severe payment risk with no contract value); **Resolve blockers** (a missing document or gap that can still be fixed); **Seek clarification** (deadline, security or evaluation is blank or needs a person); **Proceed to preparation**. A person approves or overrides into `bid_decisions`. Profit uses `margin.ts` once contract value and delivery cost are saved, at day 0 and at the band scenario (Severe 730, High 365, Moderate 180, Low 60).
 
 ### 5.4 Field lead extraction (`POST /api/leads/extract`)
 Input: Form 1 / text / image / audio. Audio → Sauti STT → transcript (stored as a source). Image → vision LLM → transcript with uncertain spans. Then LLM → Form 1 candidate fields with confidence → `normalize.ts` (dates incl. "Fri" → next Friday from the capture date, phones to `+2547…`, org names, industry labels) → `duplicates.ts` (exact phone/email/reference = strong; normalized-name Jaro-Winkler ≥ 0.9 = likely) → user confirms → save.

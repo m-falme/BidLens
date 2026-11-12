@@ -38,14 +38,12 @@ async function OverviewBody() {
   await connection();
   const tenders = await listTenders();
   const uploaded = tenders.filter((tender) => tender.pdfSources > 0);
-  const recommended = uploaded.filter(
-    (tender) => tender.decision === "bid" || tender.decision === "bid_higher",
-  ).length;
+  const proceeded = uploaded.filter((tender) => tender.finalLabel === "proceed_to_preparation").length;
   const needsHuman = uploaded.reduce((sum, tender) => sum + tender.needsHuman, 0);
   const latest = uploaded.slice(0, 4);
   const stats = [
     { label: "Tenders reviewed", value: String(uploaded.length), note: "Uploaded tender documents" },
-    { label: "Recommended to bid", value: String(recommended), note: "Recorded as Bid or Bid higher" },
+    { label: "Decided to proceed", value: String(proceeded), note: "Latest decision is Proceed to preparation" },
     { label: "Value at risk", value: "Not stated", note: "No contract value is written on these tenders" },
     { label: "Needs a person", value: String(needsHuman), note: "Fields still to check" },
   ];
@@ -87,7 +85,7 @@ async function OverviewBody() {
                       {tender.closing ? `Closes ${sentenceCase(tender.closing)}` : "Closing date not stated"}
                     </p>
                   </div>
-                  <DecisionBadge choice={tender.decision} />
+                  <DecisionBadge label={tender.finalLabel} />
                 </li>
               );
             })}

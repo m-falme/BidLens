@@ -21,7 +21,11 @@ type SeedRow<T extends keyof Tables, Narrowed = object, Defaulted extends string
 
 export type CompanyRow = SeedRow<"companies", { profile_json: Record<string, unknown> }>;
 export type CapabilityRow = SeedRow<"capabilities", { kind: CapabilityKind; evidence_ref: string }>;
-export type OpportunityRow = SeedRow<"opportunities", { type: "procurement" | "field"; status: OpportunityStatus }>;
+export type OpportunityRow = SeedRow<
+  "opportunities",
+  { type: "procurement" | "field"; status: OpportunityStatus },
+  "contract_value_kes" | "delivery_cost_kes"
+>;
 export type SourceRow = SeedRow<"sources", { opportunity_id: string; kind: SourceKind; raw_text: string }, "role">;
 export type SourcePageRow = SeedRow<"source_pages">;
 export type FieldRow = SeedRow<

@@ -49,6 +49,47 @@ export type Database = {
           },
         ]
       }
+      bid_decisions: {
+        Row: {
+          action: string
+          created_at: string
+          final_label: string
+          id: string
+          reason: string | null
+          recommended_label: string
+          reviewer_name: string
+          tender_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          final_label: string
+          id?: string
+          reason?: string | null
+          recommended_label: string
+          reviewer_name: string
+          tender_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          final_label?: string
+          id?: string
+          reason?: string | null
+          recommended_label?: string
+          reviewer_name?: string
+          tender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bid_decisions_tender_id_fkey"
+            columns: ["tender_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       capabilities: {
         Row: {
           company_id: string
@@ -476,8 +517,10 @@ export type Database = {
         Row: {
           buyer_county: string | null
           company_id: string
+          contract_value_kes: number | null
           created_at: string
           deadline_at: string | null
+          delivery_cost_kes: number | null
           follow_up_on: string | null
           id: string
           location: string | null
@@ -499,8 +542,10 @@ export type Database = {
         Insert: {
           buyer_county?: string | null
           company_id: string
+          contract_value_kes?: number | null
           created_at?: string
           deadline_at?: string | null
+          delivery_cost_kes?: number | null
           follow_up_on?: string | null
           id?: string
           location?: string | null
@@ -522,8 +567,10 @@ export type Database = {
         Update: {
           buyer_county?: string | null
           company_id?: string
+          contract_value_kes?: number | null
           created_at?: string
           deadline_at?: string | null
+          delivery_cost_kes?: number | null
           follow_up_on?: string | null
           id?: string
           location?: string | null

@@ -13,31 +13,39 @@ import { RiskBadge } from "@/components/tenders/markers";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getWorkspaceName } from "@/lib/db/queries/company";
+import { listBidDecisions } from "@/lib/db/queries/bid-decisions";
 import { listDemoCapabilities, replaceReadiness } from "@/lib/db/queries/readiness";
 import { listStageReviews } from "@/lib/db/queries/stage-reviews";
 import {
-  getLatestDecision,
   getTenderDetail,
   listCountyRisk,
   listSecurityPages,
   type CountyRiskListItem,
   type RunRecord,
 } from "@/lib/db/queries/tenders";
-import { closingLabel, confidenceLabel, DECISION_LABEL, formatWhen, matchCountyName, RISK_LABEL, sentenceCase, type DecisionChoice } from "@/lib/format/display";
+import { closingLabel, confidenceLabel, formatWhen, matchCountyName, RISK_LABEL, sentenceCase } from "@/lib/format/display";
 import { presentLeadCopy, sourceLabel } from "@/lib/leads/public-names";
 import { FIELD_STATUSES } from "@/lib/db/vocab";
 import { isWithdrawnByAddendum, matchRequirements } from "@/lib/readiness/match";
+import { daysUntilDeadline } from "@/lib/recommendation/deadline";
+import type { BidDecisionRecord } from "@/lib/recommendation/decision";
+import { RECOMMENDATION_LABEL } from "@/lib/recommendation/labels";
+import { isClarificationKey, recommend } from "@/lib/recommendation/recommend";
+import { decisionTrail, latestBidDecision } from "@/lib/recommendation/trail";
 import type { GroupStats } from "@/lib/tenders/extract-pipeline";
 import { findBidSecurityConflicts } from "@/lib/tenders/document-conflicts";
-import { ADDENDUM_FIELD_GROUPS, MAIN_FIELD_GROUPS } from "@/lib/tenders/field-catalog";
+import { ADDENDUM_FIELD_GROUPS, FIELD_SPECS, MAIN_FIELD_GROUPS } from "@/lib/tenders/field-catalog";
 import { summarizeReview } from "@/lib/tenders/review";
-import { commercialFinding, complianceFinding, interpretationFinding, latestByStage } from "@/lib/tenders/stage-review";
+import { commercialFinding, complianceFinding, formatReviewedAt, interpretationFinding, latestByStage } from "@/lib/tenders/stage-review";
 import { buildWhatMatters } from "@/lib/tenders/what-matters";
 import { cn } from "@/lib/utils";
 
 import { AgentSection, AssessmentStepper } from "./assessment-journey";
+import { DecisionTrail } from "./decision-trail";
 import { ExtractionStatus, type SourceStatus } from "./extraction-status";
+import { ProfitCard } from "./profit-card";
 import { ReadinessCard } from "./readiness-card";
+import { RecommendationCard } from "./recommendation-card";
 import { FieldsView, type ViewField } from "./fields-view";
 import TenderLoading from "./loading";
 
@@ -61,11 +69,11 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
   await connection();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
-  const [detail, decision, counties, stageReviews, workspaceName] = await Promise.all([
+  const [detail, counties, stageReviews, bidDecisions, workspaceName] = await Promise.all([
     getTenderDetail(id),
-    getLatestDecision(id),
     listCountyRisk(),
     listStageReviews(id),
+    listBidDecisions(id),
     getWorkspaceName(),
   ]);
   if (!detail) notFound();
@@ -182,6 +190,39 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
   const countyRisk = counties.find((county) => county.county === matchedCounty);
   const closingText = viewFields.find((field) => field.key === "closing_datetime" && field.value)?.value ?? null;
   const closing = closingLabel(workbookLead ? presentLeadCopy(closingText) : closingText, opportunity.deadline_at);
+  const closingField = viewFields.find(
+    (field) => field.key === "closing_datetime" && roleOf(field.source_id) === "main",
+  );
+  const closingUsable =
+    closingField && (closingField.status === "source_confirmed" || closingField.status === "ai_inferred")
+      ? closingField.value
+      : null;
+  const daysUntil = daysUntilDeadline({
+    deadlineAt: opportunity.deadline_at,
+    closingText: closingUsable,
+    asOf: new Date(),
+  });
+  const facts = viewFields.flatMap((field) => {
+    if (!isClarificationKey(field.key)) return [];
+    const label = FIELD_SPECS[field.key].label;
+    return [
+      {
+        key: field.key,
+        status: field.status,
+        label,
+        item: field.value?.replace(/\s+/g, " ").trim() || label,
+      },
+    ];
+  });
+  const recommendation = recommend({
+    readiness,
+    facts,
+    band: countyRisk?.band ?? null,
+    contractValueKes: opportunity.contract_value_kes,
+    daysUntilDeadline: daysUntil,
+  });
+  const latestDecision = latestBidDecision(bidDecisions);
+  const trail = decisionTrail(stageReviews, bidDecisions);
   const heading = sentenceCase(displayTitle);
   const reviews = latestByStage(stageReviews);
   const commercial =
@@ -218,6 +259,8 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
           </Button>
         )}
       </div>
+
+      <DecisionCard decision={latestDecision} />
 
       <AssessmentStepper reviews={reviews} />
 
@@ -307,31 +350,41 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
       <AgentSection
         stage="should_bid"
         tenderId={opportunity.id}
-        finding={commercial}
+        finding={`${commercial} Recommendation: ${RECOMMENDATION_LABEL[recommendation.label]}.`}
         review={reviews.should_bid}
       >
         <PaymentCard risk={countyRisk} />
-        <DecisionCard choice={decision} />
+        <ProfitCard
+          tenderId={opportunity.id}
+          contractValueKes={opportunity.contract_value_kes}
+          deliveryCostKes={opportunity.delivery_cost_kes}
+          band={countyRisk?.band ?? null}
+        />
+        <RecommendationCard tenderId={opportunity.id} recommendation={recommendation} />
       </AgentSection>
 
       {pdfSources.length > 0 && <ExtractionStatus opportunityId={opportunity.id} sources={sourceStatuses} />}
+      <DecisionTrail entries={trail} />
     </div>
   );
 }
 
-function DecisionCard({ choice }: { choice: DecisionChoice | null }) {
+function DecisionCard({ decision }: { decision: BidDecisionRecord | null }) {
   return (
     <Card>
       <CardHeader className="gap-2">
         <p className="text-sm text-muted-foreground">Decision</p>
-        <CardTitle className="text-3xl">{choice ? DECISION_LABEL[choice] : "No decision recorded"}</CardTitle>
+        <CardTitle className="text-3xl">
+          {decision ? RECOMMENDATION_LABEL[decision.finalLabel] : "No decision recorded"}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-muted-foreground">
-          {choice
-            ? "Recorded by the bid team."
-            : "The bid team has not recorded Bid, Bid higher, Ask for advance, or Skip."}
+          {decision
+            ? `${decision.action === "approve" ? "Approved" : "Overridden"} by ${decision.reviewerName} · ${formatReviewedAt(decision.createdAt)}`
+            : "No one has approved or overridden the recommendation."}
         </p>
+        {decision?.reason && <p className="mt-2">{decision.reason}</p>}
       </CardContent>
     </Card>
   );

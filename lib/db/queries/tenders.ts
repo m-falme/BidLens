@@ -2,6 +2,8 @@ import "server-only";
 
 import { DEMO_COMPANY_NAME } from "@/lib/app-config";
 import { asDecision, closingLabel, matchCountyName, type DecisionChoice } from "@/lib/format/display";
+import { asRecommendationLabel, type RecommendationLabel } from "@/lib/recommendation/labels";
+import { latestLabelByTender } from "@/lib/recommendation/trail";
 import { RISK_BANDS, type RiskBand } from "@/lib/risk/county-score";
 import type { ExtractedField, GroupStats } from "@/lib/tenders/extract-pipeline";
 
@@ -50,7 +52,7 @@ export interface TenderListItem {
   needsHuman: number;
   county: string | null;
   closing: string | null;
-  decision: DecisionChoice | null;
+  finalLabel: RecommendationLabel | null;
   riskBand: RiskBand | null;
   riskScore: number | null;
 }
@@ -59,29 +61,46 @@ function asBand(value: string | null): RiskBand | null {
   return RISK_BANDS.find((band) => band === value) ?? null;
 }
 
+function asKes(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const amount = Number(value);
+    return Number.isFinite(amount) ? amount : null;
+  }
+  return null;
+}
+
 function fieldValue(fields: readonly { key: string; value: string | null }[], key: string): string | null {
   return fields.find((field) => field.key === key && field.value)?.value ?? null;
 }
 
 export async function listTenders(): Promise<TenderListItem[]> {
   const db = getServiceClient();
-  const [{ data, error }, risk] = await Promise.all([
+  const [{ data, error }, risk, recorded] = await Promise.all([
     db
       .from("opportunities")
       .select(
-        "id, title, organization, reference, created_at, deadline_at, buyer_county, sources(kind, role), fields(status, key, value), decisions(choice, created_at)",
+        "id, title, organization, reference, created_at, deadline_at, buyer_county, sources(kind, role), fields(status, key, value)",
       )
       .eq("type", "procurement")
       .order("created_at", { ascending: false }),
     db.from("county_risk").select("county, band, score"),
+    db.from("bid_decisions").select("tender_id, final_label, created_at"),
   ]);
   if (error) fail("list tenders", error);
   if (risk.error) fail("list county risk", risk.error);
+  if (recorded.error) fail("list bid decisions", recorded.error);
+  const labels = latestLabelByTender(
+    recorded.data.flatMap((row) => {
+      const finalLabel = asRecommendationLabel(row.final_label);
+      if (!finalLabel) return [];
+      return [{ tenderId: row.tender_id, finalLabel, createdAt: row.created_at }];
+    }),
+  );
   const counties = risk.data.map((row) => row.county);
   return data.map((o) => {
     const countyName = matchCountyName(fieldValue(o.fields, "county") ?? o.buyer_county, counties);
     const county = countyName ? risk.data.find((row) => row.county === countyName) : undefined;
-    const latest = [...o.decisions].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
     return {
       id: o.id,
       title: o.title,
@@ -94,7 +113,7 @@ export async function listTenders(): Promise<TenderListItem[]> {
       needsHuman: o.fields.filter((f) => f.status === "needs_human").length,
       county: countyName,
       closing: closingLabel(fieldValue(o.fields, "closing_datetime"), o.deadline_at),
-      decision: asDecision(latest?.choice),
+      finalLabel: labels.get(o.id) ?? null,
       riskBand: asBand(county?.band ?? null),
       riskScore: county?.score === null || county?.score === undefined ? null : Number(county.score),
     };
@@ -136,6 +155,25 @@ export async function getLatestDecision(opportunityId: string): Promise<Decision
     .limit(1);
   if (error) fail("load decision", error);
   return asDecision(data[0]?.choice);
+}
+
+export async function saveTenderFigures(input: {
+  tenderId: string;
+  contractValueKes: number | null;
+  deliveryCostKes: number | null;
+}): Promise<void> {
+  const companyId = await getDemoCompanyId();
+  const { data, error } = await getServiceClient()
+    .from("opportunities")
+    .update({
+      contract_value_kes: input.contractValueKes,
+      delivery_cost_kes: input.deliveryCostKes,
+    })
+    .eq("id", input.tenderId)
+    .eq("company_id", companyId)
+    .select("id");
+  if (error) fail("save tender figures", error);
+  if (!data || data.length === 0) throw new Error("That tender was not found.");
 }
 
 export async function listCountyRisk(): Promise<CountyRiskListItem[]> {
@@ -193,7 +231,16 @@ export interface CitedPage {
 export interface TenderDetail {
   opportunity: Pick<
     Tables["opportunities"]["Row"],
-    "id" | "title" | "organization" | "reference" | "buyer_county" | "type" | "created_at" | "deadline_at"
+    | "id"
+    | "title"
+    | "organization"
+    | "reference"
+    | "buyer_county"
+    | "type"
+    | "created_at"
+    | "deadline_at"
+    | "contract_value_kes"
+    | "delivery_cost_kes"
   >;
   sources: SourceRecord[];
   runs: RunRecord[];
@@ -209,11 +256,18 @@ export async function getTenderDetail(opportunityId: string): Promise<TenderDeta
   const db = getServiceClient();
   const { data: opportunity, error } = await db
     .from("opportunities")
-    .select("id, title, organization, reference, buyer_county, type, created_at, deadline_at")
+    .select(
+      "id, title, organization, reference, buyer_county, type, created_at, deadline_at, contract_value_kes, delivery_cost_kes",
+    )
     .eq("id", opportunityId)
     .maybeSingle();
   if (error) fail("load tender", error);
   if (!opportunity) return null;
+
+  const figures = {
+    contract_value_kes: asKes(opportunity.contract_value_kes),
+    delivery_cost_kes: asKes(opportunity.delivery_cost_kes),
+  };
 
   const { data: sources, error: sourcesError } = await db
     .from("sources")
@@ -253,7 +307,7 @@ export async function getTenderDetail(opportunityId: string): Promise<TenderDeta
   );
 
   return {
-    opportunity,
+    opportunity: { ...opportunity, ...figures },
     sources: sources as SourceRecord[],
     runs: runs.data as RunRecord[],
     fields: fields.data as FieldRecord[],

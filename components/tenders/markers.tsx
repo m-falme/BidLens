@@ -1,17 +1,12 @@
 import { Badge } from "@/components/ui/badge";
-import {
-  DECISION_CLASS,
-  DECISION_LABEL,
-  RISK_CLASS,
-  RISK_LABEL,
-  type DecisionChoice,
-} from "@/lib/format/display";
+import { RECOMMENDATION_CLASS, RECOMMENDATION_LABEL, type RecommendationLabel } from "@/lib/recommendation/labels";
+import { RISK_CLASS, RISK_LABEL } from "@/lib/format/display";
 import type { RiskBand } from "@/lib/risk/county-score";
 import { cn } from "@/lib/utils";
 
-export function DecisionBadge({ choice }: { choice: DecisionChoice | null }) {
-  const label = choice ? DECISION_LABEL[choice] : "No decision yet";
-  return <Badge className={cn("h-6 px-2.5", DECISION_CLASS[choice ?? "none"])}>{label}</Badge>;
+export function DecisionBadge({ label }: { label: RecommendationLabel | null }) {
+  const text = label ? RECOMMENDATION_LABEL[label] : "No decision yet";
+  return <Badge className={cn("h-6 px-2.5", RECOMMENDATION_CLASS[label ?? "none"])}>{text}</Badge>;
 }
 
 export function RiskBadge({ band }: { band: RiskBand | null }) {

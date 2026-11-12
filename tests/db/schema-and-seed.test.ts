@@ -34,9 +34,9 @@ function pgliteWriter(db: PGlite): SeedWriter {
 }
 
 const TABLES = [
-  "activities", "capabilities", "companies", "county_pending_bills", "county_risk", "decisions",
-  "duplicate_candidates", "fields", "opportunities", "proposals", "requirements", "risk_assessments",
-  "source_pages", "sources", "stage_reviews",
+  "activities", "bid_decisions", "capabilities", "companies", "county_pending_bills", "county_risk",
+  "decisions", "duplicate_candidates", "fields", "opportunities", "proposals", "requirements",
+  "risk_assessments", "source_pages", "sources", "stage_reviews",
 ];
 
 let db: PGlite;
@@ -57,6 +57,7 @@ beforeAll(async () => {
   await db.exec(readFileSync("supabase/migrations/0001_init.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0004_company_documents.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0005_stage_reviews.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0006_decisions.sql", "utf8"));
   plan = await buildSeedPlan(process.cwd());
   await runSeed(plan.steps, pgliteWriter(db));
 }, 120_000);
@@ -106,6 +107,41 @@ describe("0005_stage_reviews.sql", () => {
         [opportunity.id],
       ),
     ).rejects.toThrow(/stage_reviews_stage_check/);
+  });
+});
+
+describe("0006_decisions.sql", () => {
+  it("stores an approval and an override, and refuses changes", async () => {
+    const opportunity = await one<{ id: string }>(`select id from public.opportunities limit 1`);
+    await db.query(
+      `insert into public.bid_decisions
+         (tender_id, recommended_label, final_label, action, reviewer_name)
+       values ($1, 'proceed_to_preparation', 'proceed_to_preparation', 'approve', 'Amina')`,
+      [opportunity.id],
+    );
+    await db.query(
+      `insert into public.bid_decisions
+         (tender_id, recommended_label, final_label, action, reason, reviewer_name)
+       values ($1, 'proceed_to_preparation', 'consider_declining', 'override', 'The bond cannot be raised.', 'Amina')`,
+      [opportunity.id],
+    );
+    expect(await count("bid_decisions")).toBe(2);
+    await expect(db.query(`update public.bid_decisions set reason = 'changed'`)).rejects.toThrow(/insert-only/);
+    await expect(db.query(`delete from public.bid_decisions`)).rejects.toThrow(/insert-only/);
+    await expect(
+      db.query(
+        `insert into public.bid_decisions
+           (tender_id, recommended_label, final_label, action, reviewer_name)
+         values ($1, 'proceed_to_preparation', 'consider_declining', 'approve', 'Amina')`,
+        [opportunity.id],
+      ),
+    ).rejects.toThrow(/bid_decisions_check/);
+    await db.query(`update public.opportunities set contract_value_kes = 8000000, delivery_cost_kes = 6880000 where id = $1`, [
+      opportunity.id,
+    ]);
+    await expect(
+      db.query(`update public.opportunities set contract_value_kes = -1 where id = $1`, [opportunity.id]),
+    ).rejects.toThrow(/contract_value_kes/);
   });
 });
 

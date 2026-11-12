@@ -2,7 +2,7 @@
 > Cursor: update this at the end of every step. Keep it under ~60 lines. Newest first in "Log".
 
 ## Status
-- **Current step:** 4 remaining work is the profit table and recommendation. The screen is now BidLens Tenders: purple theme, three home actions, and a three-step review on each tender. Payment risk card is in step 3. Deploy still to confirm after this push.
+- **Current step:** 6 done. A tender shows a rule-based recommendation, optional profit from saved value and cost, and an insert-only decision trail. List badges use the latest final label. Deploy still to confirm.
 - **Deployed URL:** —
 - **Repo:** https://github.com/m-falme/BidLens, branch `main`
 - **Gate:** Thu 12 Nov 2026 · assessment 14:00–15:30 EAT · cut 16:00
@@ -11,10 +11,12 @@
 - [x] 1. Tender upload + extraction with evidence
 - [ ] 2. Quote check + human correction
 - [x] 3. Readiness (met / missing / unclear)
-- [ ] 4. Payment risk card + margin table + recommendation
+- [x] 4. Payment risk card + profit view + recommendation
 - [ ] 5. Deployed public link with seeded demo data
 
 ## Decisions
+- 2026-11-13: Recommendation is code in `lib/recommendation` (no model call). First match wins: Consider declining, Resolve blockers, Seek clarification, Proceed to preparation. A licence, certification, audited history or experience line that could disqualify us cannot be obtained for this bid. Any other missing document is treated as fixable when 7 or more days remain, or as too late when the deadline is unknown, past, or closer than that. Severe payment risk with no saved contract value is also Consider declining.
+- 2026-11-13: Profit uses `margin.ts` at day 0 and at the band scenario (Low 60, Moderate 180, High 365, Severe 730). Loan rate is 16% a year because the company profile has none. The screen does not call that rate an example. Contract value and delivery cost are nullable columns on `opportunities`, left out of the seed so a re-seed does not clear them. `bid_decisions` is insert-only (0006, pushed). The latest final label is the top decision card and the list badge.
 - 2026-11-12: The product name on screen is **BidLens Tenders** (tagline “Your AI Procurement Companion”, by Tech Nova). Repo, package and database identifiers stay `bidlens`. Zanari Analytics is the workspace, read from `companies.name`, not the brand.
 - 2026-11-12: Screen copy never says demo, synthetic, or a model name. Workbook buyers are shown under fictional names (Lakeview Water Services Board, Mlima Agricultural Research Institute, and three others) with normal references. Stored rows and quotes stay as loaded; a form source (not a pdf) is what marks a workbook lead. Real tender quotes are not rewritten.
 - 2026-11-12: Single Next.js app (no separate Python backend) for speed and one deploy.
@@ -50,14 +52,14 @@
 - 2026-11-12 (step 3 live): Listed models with the key. `gemini-2.5-flash` is closed to new users. `gemini-3.6-flash` accepts `additionalProperties: false` but the free tier is 20 requests/day and was used up probing. Live model is `gemini-3.5-flash-lite` (thinkingLevel `minimal`; 3.7/3.8 reject `minimal`). Gemini rejects `maxItems` on our array schema, so the 60-item cap is applied after the answer. SDK `maxRetries: 0`; one extra retry on a demand error. Link-styled buttons set `nativeButton={false}`.
 
 ## Next
-- Step 4 remaining: the profit table (margin.ts at 60/180/365/730) once a contract value is known, and a rule-based recommendation in `lib/risk/recommend.ts` with Approve/Override into `decisions`. The tender page already reserves the decision card and the county score. Do not invent a price or a bid. Do not re-extract. Supabase CLI needs `--remote`. Migration 0004 is applied and seeded. Then deploy if the public link is still missing.
+- Deploy the public link if it is still missing. Do not invent a price or a bid. Do not re-extract. Supabase CLI needs `--remote`.
 - Human correction of an extracted field (keep `original_value`) is still not built. Quote check already runs in extraction.
 
 ## Known issues / open questions
 - Free-tier Gemini: `gemini-3.6-flash` is 20 requests/day (exhausted while choosing a model). Live calls use `gemini-3.5-flash-lite`. A demand spike retries once.
 - Field inserts are chunked (200) without a transaction; a mid-insert failure could leave partial fields on a failed run (runs are ~<200 fields, so one chunk in practice).
 - Scanned PDFs (e.g. Nyamira advert, 0 text): run fails with a clear "no text layer, OCR not available" message. OCR is a later step.
-- PGlite schema test applies 0001, 0004 and 0005. 0002 is on the live database. 0003 touches `storage.buckets`, which PGlite does not have.
+- PGlite schema test applies 0001, 0004, 0005 and 0006. 0002 is on the live database. 0003 touches `storage.buckets`, which PGlite does not have.
 - MsingiAI Sauti endpoint, auth format and limits: get from the challenge owner.
 - Ask mentors: must both intake options (field + procurement) be shown, or is one deep enough?
 - Vercel project not linked; Vercel env vars must use the project URL with no path.
@@ -67,6 +69,7 @@
 - npm held back esbuild's postinstall (allowScripts); tsx works regardless.
 
 ## Log
+- 2026-11-13 00:30 — Recommendation, profit view and decision trail. Four labels, first rule wins. Profit appears after contract value and delivery cost are saved. Approve or override writes `bid_decisions` (0006 pushed). 150 tests.
 - 2026-11-12 23:30 — Purple theme and agent journey. Home greeting plus Analyse Tender, Check Compliance, Assess Viability. Tender page is three steps with insert-only `stage_reviews` (0005 pushed). Workspace label reads the company name. 126 tests.
 - 2026-11-12 11:40 — Product UI. Deep green, breadcrumbs and Back, active nav. Tender list splits uploaded tenders and imported leads (short title, decision, risk band, closing date). Tender page leads with the decision, then what matters, readiness and the county payment-risk score; evidence stays in closed accordions. Overview shows four headlines. No recommendation or profit table is invented: nothing is recorded, and no contract value is stated.
 - 2026-11-12 11:20 — Product wording. Sidebar says Bid team. Sources say Uploaded PDF / Imported lead. Analysis line is "Analysed in Ns · N facts found". Workbook SIM-* and "Example …" names are substituted on screen only.

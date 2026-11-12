@@ -2,7 +2,7 @@
 > Cursor: update this at the end of every step. Keep it under ~60 lines. Newest first in "Log".
 
 ## Status
-- **Current step:** 4 in progress. What-matters card is on the tender page. Readiness, payment risk, recommendation and deploy still to do.
+- **Current step:** 4 in progress. What-matters card and readiness are on the tender page. Payment risk, recommendation and deploy still to do.
 - **Deployed URL:** —
 - **Repo:** https://github.com/m-falme/BidLens, branch `main`
 - **Gate:** Thu 12 Nov 2026 · assessment 14:00–15:30 EAT · cut 16:00
@@ -10,7 +10,7 @@
 ## P0 checklist (gate)
 - [x] 1. Tender upload + extraction with evidence
 - [ ] 2. Quote check + human correction
-- [ ] 3. Readiness (met / missing / unclear)
+- [x] 3. Readiness (met / missing / unclear)
 - [ ] 4. Payment risk card + margin table + recommendation
 - [ ] 5. Deployed public link with seeded demo data
 
@@ -42,11 +42,13 @@
 - 2026-11-12 (step 3): Addendum = source `role='addendum'` on the same opportunity; it extracts the scalar groups + `addendum_change` list (with `affects_key`). Conflicts computed at read time (`lib/tenders/addendum-conflicts.ts`): differing scalars, addendum-only values, and each change linked by BM25 to the main item (clear winner only). Real Nairobi addendum removes mandatory req. No. 27 (NCA 1/2 cert, main p.31).
 - 2026-11-12 (step 3): `getDatabaseEnv()` (Supabase vars only) for DB access, so pages work without the LLM key; extraction route returns "Extraction is not configured: …".
 - 2026-11-12 (step 3): New deps: `ai`, `@ai-sdk/google|openai|anthropic` (env-switchable provider), `unpdf`. shadcn: table, badge, alert, label.
+- 2026-11-12 (step 4): Readiness is code-only (`lib/readiness/match.ts`). `met` only with a capability id. Certificates, licences, bid security and experience are `missing` unless a certification/document/experience record matches — a service with a similar name does not count. Forms are `unclear` (shown as Needs human). Nairobi addendum withdraws the NCA line, so it is not counted. Live Nairobi: 0 met, 26 gaps, 10 could disqualify.
+- 2026-11-12 (step 4): The Zanari profile has no loan rate and no margin. The payment card must label 14% / 16% as the brief's example, not a company figure. Contract value defaults to KSh 8,000,000 only when the tender states none.
 - 2026-11-12 (step 4): In-document bid-security conflicts come from page text (amounts next to "tender security" / "bid bond"), not a second LLM pass. The same amount restated is not a conflict. Eligibility, mandatory requirements and technical scope are `<details>` closed by default.
 - 2026-11-12 (step 3 live): Listed models with the key. `gemini-2.5-flash` is closed to new users. `gemini-3.6-flash` accepts `additionalProperties: false` but the free tier is 20 requests/day and was used up probing. Live model is `gemini-3.5-flash-lite` (thinkingLevel `minimal`; 3.7/3.8 reject `minimal`). Gemini rejects `maxItems` on our array schema, so the 60-item cap is applied after the answer. SDK `maxRetries: 0`; one extra retry on a demand error. Link-styled buttons set `nativeButton={false}`.
 
 ## Next
-- Step 4 remaining: readiness match (never invent a certificate), payment-risk card, rule-based recommendation + human decision, Vercel deploy.
+- Step 4 remaining, in order: (3) payment-risk card "Will this buyer pay on time?" using seeded county_risk (Nairobi 76.5 severe, Makueni 2.6 low) and margin.ts scenarios at 60/180/365/730; (4) rule-based recommendation in `lib/risk/recommend.ts` (LLM may rephrase reasons only) plus Approve/Override into `decisions`; (5) Vercel deploy. Do not re-extract. Supabase CLI needs `--remote`.
 - Human correction of an extracted field (keep `original_value`) is still not built. Quote check already runs in extraction.
 
 ## Known issues / open questions
@@ -63,6 +65,7 @@
 - npm held back esbuild's postinstall (allowScripts); tsx works regardless.
 
 ## Log
+- 2026-11-12 10:20 — Step 4b: readiness on the tender page. Nairobi 0 met, 26 gaps, 10 could disqualify; NCA line excluded because the addendum removes it. No certificate is marked met.
 - 2026-11-12 10:10 — Step 4a: "What matters" card (max 5 points) on Nairobi and Makueni. In-document bid-security conflict is code over page text (Nairobi p.7 KSh 420,000 vs p.30 KSh 500,000). Eligibility, mandatory and scope lists are closed accordions with counts.
 - 2026-11-12 08:40 — Step 3 done. Nairobi main 68 fields (57 confirmed, 3 blank, 5 inferred, 3 needs human) in ~10s; addendum 5 fields and 1 conflict (NCA req. 27, main p.31). Makueni 222 pages, 46 fields (39 confirmed, 3 blank, 3 inferred, 1 needs human) in ~14s. Five spot-checks matched. Evidence panel highlights the quote and opens the PDF at that page.
 - 2026-11-12 07:58 — Step 3a: upload, page text, extraction pipeline, tender pages. Live LLM run was blocked (no key yet).

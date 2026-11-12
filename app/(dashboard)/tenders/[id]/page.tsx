@@ -9,8 +9,10 @@ import { z } from "zod";
 import { STATUS_META } from "@/components/evidence/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { listDemoCapabilities, replaceReadiness } from "@/lib/db/queries/readiness";
 import { getTenderDetail, listSecurityPages, type RunRecord } from "@/lib/db/queries/tenders";
 import { FIELD_STATUSES } from "@/lib/db/vocab";
+import { isWithdrawnByAddendum, matchRequirements } from "@/lib/readiness/match";
 import type { GroupStats } from "@/lib/tenders/extract-pipeline";
 import { findBidSecurityConflicts } from "@/lib/tenders/document-conflicts";
 import { ADDENDUM_FIELD_GROUPS, MAIN_FIELD_GROUPS } from "@/lib/tenders/field-catalog";
@@ -19,6 +21,7 @@ import { buildWhatMatters } from "@/lib/tenders/what-matters";
 import { cn } from "@/lib/utils";
 
 import { ExtractionStatus, type SourceStatus } from "./extraction-status";
+import { ReadinessCard } from "./readiness-card";
 import { FieldsView, type ViewField } from "./fields-view";
 import TenderLoading from "./loading";
 
@@ -109,6 +112,32 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
     needsHuman: summary.byStatus.needs_human,
     addendumConflicts: summary.conflicts.length,
   });
+  const roleOf = (sourceId: string | null) => (sourceId ? (sourceRoles.get(sourceId) ?? "main") : "main");
+  const changeTexts = viewFields.flatMap((field) =>
+    field.key === "addendum_change" && field.value ? [field.value] : [],
+  );
+  const mandatory = viewFields.filter(
+    (field) => field.key === "mandatory_requirement" && field.value && roleOf(field.source_id) === "main",
+  );
+  const withdrawn = mandatory.filter((field) => isWithdrawnByAddendum(field.value!, changeTexts));
+  const readiness = matchRequirements(
+    mandatory
+      .filter((field) => !isWithdrawnByAddendum(field.value!, changeTexts))
+      .map((field) => ({
+        text: field.value!,
+        category: "mandatory" as const,
+        pageNo: field.page_no,
+        quote: field.quote,
+      })),
+    await listDemoCapabilities(),
+  );
+  let readinessError: string | null = null;
+  try {
+    await replaceReadiness(opportunity.id, readiness.items, readiness.readinessPct);
+  } catch (error) {
+    readinessError = error instanceof Error ? error.message : "Readiness could not be saved.";
+  }
+
   const pageTexts = Object.fromEntries(citedPages.map((p) => [`${p.source_id}:${p.page_no}`, p.text]));
   const hasMainPdf = pdfSources.some((s) => s.role === "main");
 
@@ -135,6 +164,13 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
         pageTexts={pageTexts}
         matters={matters}
       >
+      <ReadinessCard
+        result={readiness}
+        withdrawn={withdrawn.map((field) => field.value!.replace(/\s+/g, " ").slice(0, 90))}
+      />
+      {readinessError && (
+        <p className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-red-800">{readinessError}</p>
+      )}
       {summary.total > 0 && (
         <Card>
           <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-4">

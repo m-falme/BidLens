@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { addendumChangeItemSchema, evidenceItemSchema, groupOutputSchema } from "@/lib/ai/schemas";
 import { ADDENDUM_FIELD_GROUPS, MAIN_FIELD_GROUPS } from "@/lib/tenders/field-catalog";
@@ -49,11 +50,14 @@ describe("group output schema", () => {
     expect(parsed.performance_security).not.toHaveProperty("status");
   });
 
-  it("takes a list per list key, empty allowed, capped at 60 items", () => {
+  it("takes a list per list key, empty allowed, without maxItems (Gemini rejects that keyword)", () => {
     const schema = groupOutputSchema(group("mandatory"));
     expect(schema.safeParse({ mandatory_requirement: [] }).success).toBe(true);
     expect(schema.safeParse({ mandatory_requirement: [item, item] }).success).toBe(true);
-    expect(schema.safeParse({ mandatory_requirement: Array(61).fill(item) }).success).toBe(false);
+    expect(schema.safeParse({ mandatory_requirement: Array(61).fill(item) }).success).toBe(true);
     expect(schema.safeParse({ mandatory_requirement: item }).success).toBe(false);
+    const json = JSON.stringify(z.toJSONSchema(schema));
+    expect(json).not.toContain("maxItems");
+    expect(json).toContain('"additionalProperties":false');
   });
 });

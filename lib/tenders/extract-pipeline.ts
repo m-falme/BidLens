@@ -6,7 +6,13 @@ import {
   EXTRACT_TENDER_INSTRUCTIONS,
   EXTRACT_TENDER_PROMPT_VERSION,
 } from "@/lib/ai/prompts/extract-tender.v1";
-import { groupOutputSchema, type AddendumChangeItem, type EvidenceItem, type GroupOutput } from "@/lib/ai/schemas";
+import {
+  groupOutputSchema,
+  MAX_LIST_ITEMS,
+  type AddendumChangeItem,
+  type EvidenceItem,
+  type GroupOutput,
+} from "@/lib/ai/schemas";
 import type { FieldStatus, SourceRole } from "@/lib/db/vocab";
 import { createBm25Index } from "@/lib/retrieval/bm25";
 import { decideFieldStatus, meaningfulValue, type StatusReason } from "@/lib/verify/field-status";
@@ -204,7 +210,7 @@ export async function extractTenderFields(input: PipelineInput): Promise<Pipelin
     }
     for (const key of group.keys) {
       const raw = output[key];
-      const items = Array.isArray(raw) ? raw : [raw];
+      const items = (Array.isArray(raw) ? raw : [raw]).slice(0, MAX_LIST_ITEMS);
       let ordinal = 0;
       for (const item of items) {
         const field = toField(key, group.id, Array.isArray(raw) ? ordinal : 0, item, pageText);

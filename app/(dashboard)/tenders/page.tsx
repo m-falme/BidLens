@@ -70,7 +70,7 @@ export default function TendersPage() {
           <h1 className="text-3xl font-semibold tracking-tight">{NAV.tenders.title}</h1>
           <p className="text-lg text-muted-foreground">{NAV.tenders.description}</p>
         </div>
-        <Button size="lg" render={<Link href="/tenders/new" />}>
+        <Button size="lg" nativeButton={false} render={<Link href="/tenders/new" />}>
           <Upload aria-hidden /> Upload a tender
         </Button>
       </div>

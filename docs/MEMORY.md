@@ -2,13 +2,13 @@
 > Cursor: update this at the end of every step. Keep it under ~60 lines. Newest first in "Log".
 
 ## Status
-- **Current step:** 3 in progress (3a committed): upload + page text + extraction pipeline + tender page built and tested; **live LLM run not done yet (no LLM key on disk)**
+- **Current step:** 3 done. Live extraction on Nairobi SD-WAN (145p) + addendum (1p) and Makueni CRMIS (222p). Model `gemini-3.5-flash-lite`.
 - **Deployed URL:** —
 - **Repo:** https://github.com/m-falme/BidLens, branch `main`
 - **Gate:** Thu 12 Nov 2026 · assessment 14:00–15:30 EAT · cut 16:00
 
 ## P0 checklist (gate)
-- [ ] 1. Tender upload + extraction with evidence
+- [x] 1. Tender upload + extraction with evidence
 - [ ] 2. Quote check + human correction
 - [ ] 3. Readiness (met / missing / unclear)
 - [ ] 4. Payment risk card + margin table + recommendation
@@ -42,16 +42,14 @@
 - 2026-11-12 (step 3): Addendum = source `role='addendum'` on the same opportunity; it extracts the scalar groups + `addendum_change` list (with `affects_key`). Conflicts computed at read time (`lib/tenders/addendum-conflicts.ts`): differing scalars, addendum-only values, and each change linked by BM25 to the main item (clear winner only). Real Nairobi addendum removes mandatory req. No. 27 (NCA 1/2 cert, main p.31).
 - 2026-11-12 (step 3): `getDatabaseEnv()` (Supabase vars only) for DB access, so pages work without the LLM key; extraction route returns "Extraction is not configured: …".
 - 2026-11-12 (step 3): New deps: `ai`, `@ai-sdk/google|openai|anthropic` (env-switchable provider), `unpdf`. shadcn: table, badge, alert, label.
+- 2026-11-12 (step 3 live): Listed models with the key. `gemini-2.5-flash` is closed to new users. `gemini-3.6-flash` accepts `additionalProperties: false` but the free tier is 20 requests/day and was used up probing. Live model is `gemini-3.5-flash-lite` (thinkingLevel `minimal`; 3.7/3.8 reject `minimal`). Gemini rejects `maxItems` on our array schema, so the 60-item cap is applied after the answer. SDK `maxRetries: 0`; one extra retry on a demand error. Link-styled buttons set `nativeButton={false}`.
 
-## Next (finish step 3, in this order)
-1. Add to `.env.local`: `LLM_PROVIDER=google`, `LLM_API_KEY=…`, `LLM_MODEL=` — pick a current fast Flash model by listing models with the key (`GET https://generativelanguage.googleapis.com/v1beta/models`), don't guess. Check Gemini accepts the strict zod schema (`z.strictObject` → additionalProperties).
-2. Live run: open `/tenders/72d5c834-f3e2-44ba-814b-588f4c144894` (Nairobi SD-WAN main, already uploaded, no run yet) → extraction auto-starts. Then upload the addendum (`/tenders/new?addendum=72d5c834-…`), then one Makueni tender (`makueni_crmis_tender_document.pdf`, 222 pages).
-3. Report: fields returned, how many passed quote check, needs-review count, addendum conflicts (expect NCA req. 27). Spot-check 5 fields vs PDF (known: validity 120 days p.27; bid security KSh 420,000 p.7; interest rate blank p.134; payment days blank p.134; req. 27 NCA p.31). Note: main doc also says KSh 500,000 on p.30 (internal inconsistency, not detected yet).
-4. Tune prompt/queries only if results demand it (new prompt version file if wording changes). Click-test the evidence panel + quote highlight + "Open PDF at page".
-5. Update ARCHITECTURE §3/§6 for the decisions above (prompts .ts, generateText+Output, sources.role, extraction_runs). Commit `step 3: tender upload and evidence extraction`, update MEMORY, report.
+## Next
+- Step 4: human correction of an extracted field (keep `original_value`). Quote check already runs in extraction.
+- Nairobi p.30 also says bid security KSh 500,000 (the invitation says 420,000 on p.7). Not flagged yet.
 
 ## Known issues / open questions
-- `.env.local` has no `LLM_*` vars yet (blocks live extraction; everything else runs).
+- Free-tier Gemini: `gemini-3.6-flash` is 20 requests/day (exhausted while choosing a model). Live calls use `gemini-3.5-flash-lite`. A demand spike retries once.
 - Field inserts are chunked (200) without a transaction; a mid-insert failure could leave partial fields on a failed run (runs are ~<200 fields, so one chunk in practice).
 - Scanned PDFs (e.g. Nyamira advert, 0 text): run fails with a clear "no text layer, OCR not available" message. OCR is a later step.
 - PGlite schema test applies only 0001; 0002 verified by hand in PGlite + live push. Add it to the test.
@@ -64,7 +62,8 @@
 - npm held back esbuild's postinstall (allowScripts); tsx works regardless.
 
 ## Log
-- 2026-11-12 07:58 — Step 3a: migrations 0002 (sources.role, extraction_runs, fields.extraction_run_id/ordinal/affects_key) + 0003 (private `sources` bucket, PDF, 25 MB) pushed live; generated types → `lib/db/database.types.ts`, seed rows derive from them. Built lib/pdf, retrieval, ai, verify/field-status, tenders/*, db queries, `/tenders`, `/tenders/new`, `/tenders/[id]`, `POST /api/tenders/[id]/extract`. Browser-tested: non-PDF rejected; Nairobi PDF uploaded (145 pages, 5 need OCR) → tender page → extraction stops with "not configured". 86 tests; lint/typecheck/build clean.
+- 2026-11-12 08:40 — Step 3 done. Nairobi main 68 fields (57 confirmed, 3 blank, 5 inferred, 3 needs human) in ~10s; addendum 5 fields and 1 conflict (NCA req. 27, main p.31). Makueni 222 pages, 46 fields (39 confirmed, 3 blank, 3 inferred, 1 needs human) in ~14s. Five spot-checks matched. Evidence panel highlights the quote and opens the PDF at that page.
+- 2026-11-12 07:58 — Step 3a: upload, page text, extraction pipeline, tender pages. Live LLM run was blocked (no key yet).
 - 2026-11-12 06:25 — Step 2b: linked + `db push --remote` (0001_init) + seeded live. Verified by SQL: 1 company, 74 capabilities, 15 leads, 295 fields (295 quote-confirmed), 94 CoB rows, 47 county risk; re-seed idempotent; publishable key reads 0 rows (RLS). Fixed `.env.local` URL (had `/rest/v1/`). 52 tests; build/lint/typecheck clean.
 - 2026-11-12 05:00 — Step 2: `0001_init.sql` (14 tables, RLS, guards), `lib/risk/{county-score,margin,round}.ts`, `lib/verify/quote-check.ts`, `supabase/seed/*` + `npm run db:seed [-- --dry-run]`. 49 tests (incl. PGlite schema+seed). build/lint/typecheck clean.
 - 2026-11-12 04:15 — Step 1: Next.js skeleton, shadcn sidebar shell (5 placeholder pages), §3 folders, .env.example, zod env loader + 5 Vitest tests. build/lint/typecheck/test clean.

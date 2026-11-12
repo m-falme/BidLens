@@ -14,7 +14,7 @@ v1.0 · 12 Nov 2026 · Owner: Mark (engineering) · Read with `PRD.md`.
 | App | **Next.js (App Router) + TypeScript (strict)** | UI + route handlers + server actions in one project |
 | UI | **Tailwind + shadcn/ui**, **Recharts** for charts | Fast, clean, consistent |
 | DB / files | **Supabase**: Postgres + Storage (bucket `sources`) | Free tier, SQL migrations, dashboard for debugging |
-| AI | **Vercel AI SDK** (`ai`) with `generateObject` + **zod** schemas; provider via env (`LLM_PROVIDER` = `google` / `openai` / `anthropic`) | Typed structured output, swap model without code changes |
+| AI | **Vercel AI SDK** (`ai`) with `generateText` + `Output.object({ schema })` and **zod**; provider via env (`LLM_PROVIDER` = `google` / `openai` / `anthropic`) | `generateObject` is deprecated in AI SDK 7. Same zod-validated output. Swap model by env |
 | PDF text | **unpdf** (page-by-page text, serverless-safe) | Needed for page citations |
 | OCR fallback | Vision-capable LLM on page images (or `tesseract.js` if no vision model) | Scanned tenders, notebook photos |
 | Retrieval | In-memory **BM25** over page text (`wink-bm25-text-search` or ~60 lines hand-rolled) | Send only relevant pages to the LLM; cheaper and more accurate |
@@ -39,7 +39,7 @@ app/
 lib/
   ai/
     client.ts               # provider selection, retries, logging
-    prompts/                # extract-tender.v1.md, extract-lead.v1.md, match-requirements.v1.md, recommend.v1.md, proposal.v1.md
+    prompts/                # extract-tender.v1.ts (versioned TS modules, not markdown files)
     schemas.ts              # zod schemas for every LLM output
   pdf/          parse.ts (unpdf → pages[]), ocr.ts
   retrieval/    bm25.ts
@@ -65,9 +65,9 @@ All tables have `id uuid pk default gen_random_uuid()`, `created_at timestamptz 
 | `companies` | name, profile_json | One seeded row: Zanari Analytics |
 | `capabilities` | company_id, kind (`service`/`tool`/`document`/`certification`/`experience`/`sector`), name, detail, evidence_ref, verified bool | From the profile. `met` must link here |
 | `opportunities` | company_id, type (`procurement`/`field`), title, organization, location, sector, reference, deadline_at, submission_method, source_platform, source_url, retrieved_at, status (Zanari glossary), owner, next_action, follow_up_on, readiness_pct, buyer_county | The shared opportunity record for both options |
-| `sources` | opportunity_id, kind (`pdf`/`text`/`image`/`audio`/`form`/`email`), storage_path, original_name, sha256, raw_text | Originals are never overwritten |
+| `sources` | opportunity_id, kind (`pdf`/`text`/`image`/`audio`/`form`/`email`), role (`main`/`addendum`), storage_path, original_name, sha256, raw_text | Originals are never overwritten. An addendum is another source on the same opportunity |
 | `source_pages` | source_id, page_no, text, is_scanned | Page text for citations and the quote check |
-| `fields` | opportunity_id, key, value, original_value, source_id, page_no, quote, confidence numeric, status (`source_confirmed`/`ai_inferred`/`blank_in_source`/`needs_human`), edited_by, edited_at | One row per extracted field |
+| `fields` | opportunity_id, key, ordinal, value, original_value, source_id, page_no, quote, confidence numeric, status (`source_confirmed`/`ai_inferred`/`blank_in_source`/`needs_human`), extraction_run_id, affects_key, edited_by, edited_at | One row per extracted value. `ordinal` orders list items. `affects_key` is set on addendum changes |
 | `requirements` | opportunity_id, text, category (`mandatory`/`technical`/`financial`/`contractual`), page_no, quote, match (`met`/`missing`/`unclear`), capability_id null, rationale | Readiness |
 | `county_pending_bills` | county, report_date, pending_total_kes_m, budget_kes_m, age_* buckets, ageing_total_kes_m, pct_over_2y, pct_over_3y, trend_pct, data_quality (`ok`/`flagged`/`not_disclosed`), data_notes, source, source_url, retrieved_at | From CoB CSVs (Jun 2025 + Jun 2026) |
 | `county_risk` | county, pending_bills_id, score, band, confidence, part_a, part_b, part_c, reason, as_of | Computed by `lib/risk/county-score.ts`, stored for the dashboard |
@@ -76,6 +76,7 @@ All tables have `id uuid pk default gen_random_uuid()`, `created_at timestamptz 
 | `proposals` | opportunity_id, version int, brief_md, draft_md, status (`draft`/`in_review`/`approved`), placeholders_json | Editable, versioned |
 | `activities` | opportunity_id, kind (`status_change`/`note`/`edit`/`duplicate_flag`), payload_json, actor | Audit trail and pipeline history |
 | `duplicate_candidates` | opportunity_id, candidate_id, score, reasons_json, resolution (`open`/`not_duplicate`/`same`) | Never auto-merge |
+| `extraction_runs` | source_id, provider, model, prompt_version, status (`running`/`succeeded`/`failed`), error, stats_json, finished_at | One log row per extraction. At most one running or succeeded run per source |
 
 RLS: on for all tables. The demo uses the service role on the server only; the browser reads through server components/actions.
 
@@ -85,7 +86,7 @@ RLS: on for all tables. The demo uses the service role on the server only; the b
 PDF → Storage → unpdf → source_pages[] (flag pages with < 40 chars as scanned → OCR)
    → BM25 index over pages
    → for each field group (identity, dates, submission, securities, payment terms, eligibility, mandatory docs):
-        top-k pages (k≈6) → LLM generateObject(schema, pages with [p.N] markers)
+        top-k pages (k≈6) → LLM generateText + Output.object(schema, pages with [p.N] markers)
         → returns {key, value | null, page, quote, confidence}
    → quote-check(page_text, quote) → status
    → value null + clause template present → blank_in_source (e.g. "interest rate is ____")
@@ -134,9 +135,13 @@ Approved inputs only: verified fields, `met` capabilities, service catalogue, co
 `/api/voice/stt` (audio in memory → Sauti → text; audio never persisted unless the user saves it as a source). `/api/voice/tts` (text → audio stream). Voice Q&A: transcript → intent → read-only tools (`getOpportunity`, `getRisk`, `getReadiness`) → answer that cites computed values only → TTS.
 
 ## 6. AI contract
-- One wrapper `lib/ai/client.ts`: `extract<T>(schema, prompt, pages)` with temperature 0, 1 retry on schema failure (with the zod error), timeout 45s, and logs prompt version, model, tokens and latency.
+- `lib/ai/client.ts` (server-only) builds the model from `LLM_PROVIDER` / `LLM_MODEL` / `LLM_API_KEY`.
+- `lib/ai/extract.ts`: `extractStructured` calls `generateText` with `Output.object({ schema })` (AI SDK 7; `generateObject` is deprecated). Temperature 0, timeout 45s, no SDK retry (a 429 must not be sent three times). One corrective retry when zod rejects the output, with the error appended. A demand/unavailable error gets one plain retry after 3s. Each attempt logs a JSON line: prompt version, model, tokens, latency.
+- Prompts are versioned TypeScript modules in `lib/ai/prompts/` (for example `extract-tender.v1.ts`), not markdown files, so a deploy does not read prompt text from disk. The extraction run stores `prompt_version`.
 - Prompts say: *"Use only the provided pages. If a value is not present, return null. The quote must be copied verbatim from the page. Never guess."*
 - Pages are passed as `[p.12] <text>` blocks so citations are page-exact.
+- The zod schema is strict (`additionalProperties: false`). Gemini 3.6/3.5 Flash accepts that. It rejects `maxItems` on these object arrays, so the 60-item cap is applied in code after the answer, not in the schema.
+- Flash-Lite thinks unless `thinkingLevel` is `minimal`. That option is sent only for lite model ids (3.7 and 3.8 reject `minimal`). Live model (12 Nov 2026): `gemini-3.5-flash-lite`. `gemini-2.5-flash` is closed to new keys; `gemini-3.6-flash` is listed but the free tier is 20 requests/day.
 
 ## 7. Environment
 ```
@@ -144,7 +149,7 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=      # server only
 LLM_PROVIDER=google             # google | openai | anthropic
-LLM_MODEL=                      # e.g. gemini-2.5-flash
+LLM_MODEL=                      # e.g. gemini-3.5-flash-lite (2.5-flash is closed to new keys)
 LLM_API_KEY=                    # server only
 SAUTI_API_URL=                  # from MsingiAI
 SAUTI_API_KEY=                  # server only

@@ -152,6 +152,19 @@ describe("extractTenderFields (mocked LLM)", () => {
     expect(retryPrompt.length).toBeGreaterThan(0);
   });
 
+  it("keeps at most 60 items from a list the model over-returns", async () => {
+    const many = Array.from({ length: 61 }, () =>
+      item("Copy of Certificate of Incorporation", 2, "1 Copy of Certificate of Incorporation"),
+    );
+    const { model } = mockModel({
+      "- mandatory_requirement:": [JSON.stringify({ mandatory_requirement: many })],
+    });
+    const result = await extractTenderFields({ pages, role: "main", documentLabel: "test.pdf", model });
+    const listed = result.fields.filter((f) => f.key === "mandatory_requirement");
+    expect(listed).toHaveLength(60);
+    expect(listed[59]?.ordinal).toBe(59);
+  });
+
   it("drops fields an addendum does not mention instead of reporting them as gaps", async () => {
     const { model } = mockModel({
       "- addendum_change:": [

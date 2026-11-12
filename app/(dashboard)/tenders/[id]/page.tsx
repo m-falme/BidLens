@@ -104,7 +104,7 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
           <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{opportunity.title}</h1>
         </div>
         {hasMainPdf && (
-          <Button variant="outline" render={<Link href={`/tenders/new?addendum=${opportunity.id}`} />}>
+          <Button variant="outline" nativeButton={false} render={<Link href={`/tenders/new?addendum=${opportunity.id}`} />}>
             <FilePlus2 aria-hidden /> Upload an addendum
           </Button>
         )}

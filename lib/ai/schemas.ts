@@ -36,7 +36,12 @@ export const addendumChangeItemSchema = evidenceItemSchema.extend({
 });
 export type AddendumChangeItem = z.infer<typeof addendumChangeItemSchema>;
 
-const MAX_LIST_ITEMS = 60;
+/**
+ * List cap applied after the model answers. It is not `z.array().max()`: that emits `maxItems`,
+ * and Gemini's response schema rejects `maxItems` on this object shape (400 INVALID_ARGUMENT).
+ * `additionalProperties: false` from `z.strictObject` is accepted.
+ */
+export const MAX_LIST_ITEMS = 60;
 
 function itemSchemaFor(key: TenderFieldKey) {
   return key === "addendum_change" ? addendumChangeItemSchema : evidenceItemSchema;
@@ -53,7 +58,7 @@ export function groupOutputSchema(group: FieldGroup) {
     shape[key] =
       group.kind === "scalar"
         ? evidenceItemSchema.describe(description)
-        : z.array(itemSchemaFor(key)).max(MAX_LIST_ITEMS).describe(description);
+        : z.array(itemSchemaFor(key)).describe(description);
   }
   return z.strictObject(shape);
 }

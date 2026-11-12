@@ -37,6 +37,16 @@ function modelId(model: LanguageModel): string {
   return typeof model === "string" ? model : `${model.provider}:${model.modelId}`;
 }
 
+/**
+ * Flash-Lite thinks unless told not to, and that blows the 45s timeout on a full tender page.
+ * Gemini 3.7/3.8 reject thinkingLevel "minimal", so this is sent only for lite model ids.
+ */
+function googleThinkingOptions(model: LanguageModel): { providerOptions: { google: { thinkingConfig: { thinkingLevel: "minimal" } } } } | Record<string, never> {
+  const id = modelId(model);
+  if (!id.startsWith("google") || !id.includes("lite")) return {};
+  return { providerOptions: { google: { thinkingConfig: { thinkingLevel: "minimal" } } } };
+}
+
 /** Short, log-safe description of why an attempt failed (no page text, no keys). */
 function describeError(error: unknown): string {
   if (NoObjectGeneratedError.isInstance(error)) {
@@ -67,6 +77,9 @@ export async function extractStructured<TSchema extends z.ZodType>(
         output: Output.object({ schema: request.schema }),
         temperature: 0,
         timeout: LLM_TIMEOUT_MS,
+        // Schema failures are retried once below. SDK retries would repeat a 429 and burn the free-tier cap.
+        maxRetries: 0,
+        ...googleThinkingOptions(request.model),
       });
       const latencyMs = Date.now() - started;
       usage.latencyMs += latencyMs;
@@ -83,8 +96,11 @@ export async function extractStructured<TSchema extends z.ZodType>(
       }
       lastError = describeError(error);
       logCall(request, attempt, latencyMs, undefined, undefined, lastError);
-      // Only a schema failure is worth a corrective retry; network errors were already retried by the SDK.
-      if (!NoObjectGeneratedError.isInstance(error)) break;
+      const transient = /high demand|UNAVAILABLE|ECONNRESET|fetch failed|overloaded/i.test(lastError);
+      // Schema failures get the error in the next prompt. A demand spike gets one plain retry.
+      // Other failures are not retried (maxRetries is 0, so a 429 is not sent three times).
+      if (!NoObjectGeneratedError.isInstance(error) && !transient) break;
+      if (transient) await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   }
   return { ok: false, error: lastError, usage };

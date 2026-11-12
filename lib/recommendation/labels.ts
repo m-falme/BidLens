@@ -17,11 +17,11 @@ export const RECOMMENDATION_LABEL: Record<RecommendationLabel, string> = {
 
 /** Status colour is meaning only: green proceed, amber still open, red decline, grey none. */
 export const RECOMMENDATION_CLASS: Record<RecommendationLabel | "none", string> = {
-  consider_declining: "bg-red-100 text-red-800",
-  resolve_blockers: "bg-amber-100 text-amber-950",
-  seek_clarification: "bg-amber-100 text-amber-950",
-  proceed_to_preparation: "bg-green-100 text-green-800",
-  none: "bg-zinc-200 text-zinc-700",
+  consider_declining: "bg-blocker/12 text-blocker",
+  resolve_blockers: "bg-warning/15 text-warning",
+  seek_clarification: "bg-warning/15 text-warning",
+  proceed_to_preparation: "bg-confirmed/10 text-confirmed",
+  none: "bg-muted text-muted-foreground",
 };
 
 /** Checked in this order. The first match is the one that fired. */

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { DEMO_COMPANY_NAME } from "@/lib/app-config";
 import { asDecision, closingLabel, matchCountyName, type DecisionChoice } from "@/lib/format/display";
 import { asRecommendationLabel, type RecommendationLabel } from "@/lib/recommendation/labels";
@@ -52,6 +54,7 @@ export interface TenderListItem {
   needsHuman: number;
   county: string | null;
   closing: string | null;
+  deadlineAt: string | null;
   finalLabel: RecommendationLabel | null;
   riskBand: RiskBand | null;
   riskScore: number | null;
@@ -113,12 +116,24 @@ export async function listTenders(): Promise<TenderListItem[]> {
       needsHuman: o.fields.filter((f) => f.status === "needs_human").length,
       county: countyName,
       closing: closingLabel(fieldValue(o.fields, "closing_datetime"), o.deadline_at),
+      deadlineAt: o.deadline_at,
       finalLabel: labels.get(o.id) ?? null,
       riskBand: asBand(county?.band ?? null),
       riskScore: county?.score === null || county?.score === undefined ? null : Number(county.score),
     };
   });
 }
+
+/** Uploaded tender PDFs. An addendum on the same tender is not a second tender. */
+export const countUploadedTenders = cache(async function countUploadedTenders(): Promise<number> {
+  const { data, error } = await getServiceClient()
+    .from("sources")
+    .select("opportunity_id, opportunities!inner(type)")
+    .eq("kind", "pdf")
+    .eq("opportunities.type", "procurement");
+  if (error) fail("count uploaded tenders", error);
+  return new Set(data.map((row) => row.opportunity_id)).size;
+});
 
 export interface FieldLeadListItem {
   id: string;

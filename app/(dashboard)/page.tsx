@@ -2,154 +2,204 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { BarChart3, FileSearch, ShieldCheck, type LucideIcon } from "lucide-react";
 
-import { NAV } from "@/components/app-shell/nav";
-import { DecisionBadge } from "@/components/tenders/markers";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { listTenders } from "@/lib/db/queries/tenders";
+import { NAV } from "@/components/app-shell/nav";
+import { loadOverview } from "@/lib/db/queries/overview";
 import { sentenceCase } from "@/lib/format/display";
+import {
+  activeReviewNote,
+  awaitingDecisionNote,
+  evidenceCounts,
+  evidenceNote,
+  nairobiDate,
+  nextActions,
+  rowPill,
+  teamActivity,
+  upcomingDeadline,
+  type RowPill,
+} from "@/lib/overview/build";
+import { formatReviewedAt } from "@/lib/tenders/stage-review";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: NAV.overview.title };
 
-const HOME_ACTIONS: readonly {
-  key: "analyse" | "comply" | "viability";
-  href: string;
-  title: string;
-  summary: string;
-  icon: LucideIcon;
-}[] = [
-  {
-    key: "analyse",
-    href: "/tenders/new",
-    title: "Analyse Tender",
-    summary: "Extracts and explains key tender requirements.",
-    icon: FileSearch,
-  },
-  {
-    key: "comply",
-    href: "/company",
-    title: "Check Compliance",
-    summary: "Checks eligibility, highlights gaps and risks.",
-    icon: ShieldCheck,
-  },
-  {
-    key: "viability",
-    href: "/tenders",
-    title: "Assess Viability",
-    summary: "Assesses viability and potential financial strain, like delayed payments.",
-    icon: BarChart3,
-  },
-];
+const PILL_CLASS: Record<RowPill["tone"], string> = {
+  confirmed: "bg-confirmed/10 text-confirmed",
+  warning: "bg-warning/15 text-warning",
+  blocker: "bg-blocker/12 text-blocker",
+  neutral: "bg-muted text-muted-foreground",
+};
 
-function homeActions(latestTenderId: string | null) {
-  return HOME_ACTIONS.map((action) =>
-    action.key === "viability" && latestTenderId
-      ? { ...action, href: `/tenders/${latestTenderId}#should_bid` }
-      : action,
+function Pill({ tone, children }: { tone: RowPill["tone"]; children: string }) {
+  return (
+    <span className={cn("inline-flex w-fit rounded-full px-2.5 py-0.5 text-sm font-medium", PILL_CLASS[tone])}>
+      {children}
+    </span>
   );
 }
 
 async function OverviewBody() {
   await connection();
-  const tenders = await listTenders();
-  const uploaded = tenders.filter((tender) => tender.pdfSources > 0);
-  const proceeded = uploaded.filter((tender) => tender.finalLabel === "proceed_to_preparation").length;
-  const needsHuman = uploaded.reduce((sum, tender) => sum + tender.needsHuman, 0);
-  const latest = uploaded.slice(0, 4);
-  const actions = homeActions(uploaded[0]?.id ?? null);
+  const snapshot = await loadOverview();
+  const asOf = new Date();
+  const uploaded = snapshot.uploaded;
+  const unreviewed = uploaded.filter((tender) => tender.reviewedStages.length === 0).length;
+  const awaiting = uploaded.filter((tender) => tender.finalLabel === null).length;
+  const evidence = evidenceCounts(snapshot.documents, nairobiDate(asOf));
+  const deadline = upcomingDeadline(uploaded, asOf);
+  const actions = nextActions(uploaded);
+  const activity = teamActivity({
+    ...snapshot.activity,
+    when: formatReviewedAt,
+  });
   const stats = [
-    { label: "Tenders reviewed", value: String(uploaded.length), note: "Uploaded tender documents" },
-    { label: "Decided to proceed", value: String(proceeded), note: "Latest decision is Proceed to preparation" },
-    { label: "Value at risk", value: "Not stated", note: "No contract value is written on these tenders" },
-    { label: "Needs a person", value: String(needsHuman), note: "Fields still to check" },
+    { label: "Active tenders", value: String(uploaded.length), note: activeReviewNote(unreviewed, uploaded.length) },
+    { label: "Awaiting a decision", value: String(awaiting), note: awaitingDecisionNote(awaiting) },
+    { label: "Evidence on file", value: String(evidence.onFile), note: evidenceNote(evidence.expired) },
+    { label: "Upcoming deadline", value: deadline.value, note: deadline.note },
   ];
 
   return (
     <>
-      <div className="grid gap-4 md:grid-cols-3">
-        {actions.map((action) => (
-          <Link
-            key={action.key}
-            href={action.href}
-            className="flex h-full flex-col gap-4 rounded-2xl border bg-card p-6 shadow-sm transition hover:border-primary/40 hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-          >
-            <span className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-              <action.icon className="size-6" aria-hidden />
-            </span>
-            <span className="text-xl font-semibold">{action.title}</span>
-            <span className="text-muted-foreground">{action.summary}</span>
-          </Link>
-        ))}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-semibold tracking-[0.14em] text-brand uppercase">Workspace overview</p>
+          <h1 className="font-heading text-3xl tracking-tight">Overview</h1>
+          <p className="text-muted-foreground">
+            A clear view of the tenders uploaded for {snapshot.companyName}.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="lg" variant="outline" nativeButton={false} render={<Link href="/tenders/new" />}>
+            Add tender
+          </Button>
+          <Button size="lg" nativeButton={false} render={<Link href="/tenders" />}>
+            All tenders
+          </Button>
+        </div>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
-          <Card key={stat.label}>
-            <CardHeader className="gap-1">
-              <p className="text-sm text-muted-foreground">{stat.label}</p>
-              <p className="text-3xl font-semibold tracking-tight tabular-nums">{stat.value}</p>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{stat.note}</p>
-            </CardContent>
-          </Card>
+          <section key={stat.label} className="rounded-xl border border-border bg-card px-5 py-4 shadow-[0_8px_28px_rgba(23,32,42,0.05)]">
+            <p className="text-sm text-muted-foreground">{stat.label}</p>
+            <p className="font-heading mt-2 text-3xl font-semibold tracking-tight">{stat.value}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{stat.note}</p>
+          </section>
         ))}
       </div>
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">Latest tenders</h2>
-        {latest.length === 0 ? (
-          <p className="text-muted-foreground">No tenders yet.</p>
-        ) : (
-          <ul className="flex flex-col divide-y rounded-lg border px-4">
-            {latest.map((tender) => {
-              const title = sentenceCase(tender.title);
-              return (
-                <li key={tender.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
-                  <div className="min-w-0">
-                    <Link
-                      href={`/tenders/${tender.id}`}
-                      title={tender.title}
-                      className="line-clamp-2 font-medium text-primary underline-offset-4 hover:underline"
-                    >
-                      {title}
-                    </Link>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {tender.closing ? `Closes ${sentenceCase(tender.closing)}` : "Closing date not stated"}
+
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.8fr)]">
+        <section className="rounded-xl border border-border bg-card shadow-[0_8px_28px_rgba(23,32,42,0.05)]">
+          <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-2">
+            <div>
+              <h2 className="font-heading text-lg font-semibold">Active tenders</h2>
+              <p className="text-sm text-muted-foreground">Latest uploaded documents</p>
+            </div>
+            <Link href="/tenders" className="text-sm font-medium text-brand hover:underline">
+              All tenders
+            </Link>
+          </div>
+          {uploaded.length === 0 ? (
+            <p className="px-5 py-6 text-muted-foreground">No tenders uploaded yet.</p>
+          ) : (
+            <ul>
+              {uploaded.slice(0, 6).map((tender) => {
+                const pill = rowPill(tender);
+                const buyer = tender.buyer?.trim() ? sentenceCase(tender.buyer) : "Buyer not stated";
+                const meta = [buyer, tender.reference].filter(Boolean).join(" · ");
+                return (
+                  <li key={tender.id} className="flex gap-3 border-t border-border/80 px-5 py-4">
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        href={`/tenders/${tender.id}`}
+                        className="font-medium text-foreground underline-offset-4 hover:underline"
+                      >
+                        {sentenceCase(tender.title)}
+                      </Link>
+                      <p className="mt-1 text-sm text-muted-foreground">{meta}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-3">
+                        <Pill tone={pill.tone}>{pill.label}</Pill>
+                        <Link
+                          href={`/tenders/${tender.id}#should_bid`}
+                          className="text-sm font-medium text-brand hover:underline"
+                        >
+                          Assess viability
+                        </Link>
+                      </div>
+                    </div>
+                    <p className="max-w-40 shrink-0 text-right text-sm text-muted-foreground">
+                      {tender.closing?.trim() || "Not stated"}
                     </p>
-                  </div>
-                  <DecisionBadge label={tender.finalLabel} />
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        <div className="flex flex-col gap-4">
+          <section className="rounded-xl border border-border bg-card px-5 py-4 shadow-[0_8px_28px_rgba(23,32,42,0.05)]">
+            <h2 className="font-heading text-lg font-semibold">Your next actions</h2>
+            {actions.items.length === 0 ? (
+              <p className="mt-3 text-muted-foreground">Nothing is waiting.</p>
+            ) : (
+              <ul className="mt-2">
+                {actions.items.map((action) => (
+                  <li key={action.id} className="border-b border-border/70 py-3 last:border-b-0">
+                    <Link href={action.href} className="block hover:underline">
+                      <span className="font-medium">{action.title}</span>
+                      <span className="mt-0.5 block text-sm text-muted-foreground">{action.detail}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {actions.more > 0 && (
+              <Link href="/tenders" className="mt-2 inline-block text-sm font-medium text-brand hover:underline">
+                {actions.more} more on the tender list
+              </Link>
+            )}
+          </section>
+
+          <section className="rounded-xl border border-border bg-card px-5 py-4 shadow-[0_8px_28px_rgba(23,32,42,0.05)]">
+            <h2 className="font-heading text-lg font-semibold">Team activity</h2>
+            {activity.length === 0 ? (
+              <p className="mt-3 text-muted-foreground">No reviews or decisions yet.</p>
+            ) : (
+              <ul className="mt-2">
+                {activity.map((row) => (
+                  <li key={row.id} className="border-b border-border/70 py-3 last:border-b-0">
+                    <Link href={row.href} className="block hover:underline">
+                      <span className="font-medium">{row.what}</span>
+                      <span className="mt-0.5 block text-sm text-muted-foreground">{row.detail}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+      </div>
     </>
   );
 }
 
 export default function OverviewPage() {
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
-      <div className="space-y-2">
-        <h1 className="max-w-3xl text-3xl font-semibold tracking-tight md:text-4xl">
-          Hello! How can I support your tender assessment today?
-        </h1>
-      </div>
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <Suspense
         fallback={
-          <div className="flex flex-col gap-8">
-            <div className="grid gap-4 md:grid-cols-3">
-              {Array.from({ length: 3 }, (_, index) => (
-                <Skeleton key={index} className="h-40 w-full" />
-              ))}
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="flex flex-col gap-6">
+            <Skeleton className="h-24 w-full" />
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {Array.from({ length: 4 }, (_, index) => (
-                <Skeleton key={index} className="h-32 w-full" />
+                <Skeleton key={index} className="h-28 w-full" />
               ))}
             </div>
+            <Skeleton className="h-64 w-full" />
           </div>
         }
       >

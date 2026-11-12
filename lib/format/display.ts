@@ -12,11 +12,11 @@ export const DECISION_LABEL: Record<DecisionChoice, string> = {
 
 /** Status colour is meaning only: green good, amber caution, red risk, grey none. */
 export const DECISION_CLASS: Record<DecisionChoice | "none", string> = {
-  bid: "bg-green-100 text-green-800",
-  bid_higher: "bg-amber-100 text-amber-950",
-  ask_advance: "bg-amber-100 text-amber-950",
-  skip: "bg-red-100 text-red-800",
-  none: "bg-zinc-200 text-zinc-700",
+  bid: "bg-confirmed/10 text-confirmed",
+  bid_higher: "bg-warning/15 text-warning",
+  ask_advance: "bg-warning/15 text-warning",
+  skip: "bg-blocker/12 text-blocker",
+  none: "bg-muted text-muted-foreground",
 };
 
 export const RISK_LABEL: Record<RiskBand, string> = {
@@ -28,11 +28,11 @@ export const RISK_LABEL: Record<RiskBand, string> = {
 };
 
 export const RISK_CLASS: Record<RiskBand, string> = {
-  low: "bg-green-100 text-green-800",
-  moderate: "bg-amber-100 text-amber-950",
-  high: "bg-red-100 text-red-800",
-  severe: "bg-red-100 text-red-800",
-  unknown: "bg-zinc-200 text-zinc-700",
+  low: "bg-confirmed/10 text-confirmed",
+  moderate: "bg-warning/15 text-warning",
+  high: "bg-blocker/12 text-blocker",
+  severe: "bg-blocker/12 text-blocker",
+  unknown: "bg-muted text-muted-foreground",
 };
 
 const CONFIDENCE_LABEL: Record<string, string> = {

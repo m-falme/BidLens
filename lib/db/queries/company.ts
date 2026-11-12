@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { COMPANY_PAPERS, documentNameFromRequirement, type DocumentHolding, type PaperGroup } from "@/lib/company/papers";
 import { DOCUMENT_HOLDINGS } from "@/lib/db/vocab";
 
@@ -44,12 +46,12 @@ function asHolding(value: string | null): DocumentHolding | null {
 }
 
 /** The signed-in organisation. Read from the company row, not written into the brand. */
-export async function getWorkspaceName(): Promise<string> {
+export const getWorkspaceName = cache(async function getWorkspaceName(): Promise<string> {
   const companyId = await getDemoCompanyId();
   const { data, error } = await getServiceClient().from("companies").select("name").eq("id", companyId).single();
   if (error || !data) fail("load workspace", error);
   return data.name;
-}
+});
 
 export async function getDemoCompanyProfile(): Promise<CompanyProfile> {
   const companyId = await getDemoCompanyId();

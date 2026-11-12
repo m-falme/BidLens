@@ -45,8 +45,7 @@ const LIST_TITLES: Record<string, string> = {
   addendum_change: "Changes made by the addendum",
 };
 
-/** Long lists stay closed until someone asks for them. The count stays visible. */
-const COLLAPSED_LISTS = new Set(["eligibility", "mandatory_requirement", "technical_scope"]);
+/** Evidence stays closed until someone asks for it. The count stays visible. */
 
 function ValueText({ field }: { field: ViewField }) {
   if (field.value !== null) return <span className="whitespace-pre-line">{field.value}</span>;
@@ -86,7 +85,7 @@ function FieldTable({ fields, showKey, onOpen }: { fields: ViewField[]; showKey:
             <TableCell className="font-medium whitespace-normal">
               {showKey ? fieldLabel(f.key) : f.ordinal + 1}
             </TableCell>
-            <TableCell className="max-w-xl whitespace-normal">
+            <TableCell className="max-w-xl whitespace-normal break-words">
               <ValueText field={f} />
               {f.affects_key && (
                 <span className="mt-1 block text-sm text-muted-foreground">Affects: {fieldLabel(f.affects_key)}</span>
@@ -108,32 +107,27 @@ function FieldsForSource({ fields, onOpen }: { fields: ViewField[]; onOpen: (f: 
   const scalar = SCALAR_FIELD_KEYS.flatMap((k) => fields.filter((f) => f.key === k));
   const lists = LIST_FIELD_KEYS.map((k) => [k, fields.filter((f) => f.key === k)] as const).filter(([, l]) => l.length > 0);
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       {scalar.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <h3 className="text-lg font-semibold">Key facts</h3>
-          <FieldTable fields={scalar} showKey onOpen={onOpen} />
-        </section>
+        <details className="rounded-lg border">
+          <summary className="cursor-pointer px-4 py-3 text-lg font-semibold">
+            Key facts <span className="font-normal text-muted-foreground">({scalar.length})</span>
+          </summary>
+          <div className="overflow-x-auto px-2 pb-3">
+            <FieldTable fields={scalar} showKey onOpen={onOpen} />
+          </div>
+        </details>
       )}
-      {lists.map(([key, list]) =>
-        COLLAPSED_LISTS.has(key) ? (
-          <details key={key} className="rounded-lg border">
-            <summary className="cursor-pointer px-4 py-3 text-lg font-semibold">
-              {LIST_TITLES[key]} <span className="font-normal text-muted-foreground">({list.length})</span>
-            </summary>
-            <div className="px-2 pb-3">
-              <FieldTable fields={list} showKey={false} onOpen={onOpen} />
-            </div>
-          </details>
-        ) : (
-          <section key={key} className="flex flex-col gap-2">
-            <h3 className="text-lg font-semibold">
-              {LIST_TITLES[key]} <span className="font-normal text-muted-foreground">({list.length})</span>
-            </h3>
+      {lists.map(([key, list]) => (
+        <details key={key} className="rounded-lg border">
+          <summary className="cursor-pointer px-4 py-3 text-lg font-semibold">
+            {LIST_TITLES[key]} <span className="font-normal text-muted-foreground">({list.length})</span>
+          </summary>
+          <div className="overflow-x-auto px-2 pb-3">
             <FieldTable fields={list} showKey={false} onOpen={onOpen} />
-          </section>
-        ),
-      )}
+          </div>
+        </details>
+      ))}
     </div>
   );
 }
@@ -273,7 +267,7 @@ function WhatMattersCard({
 }) {
   if (points.length === 0) return null;
   return (
-    <Card className="border-primary/40">
+    <Card>
       <CardHeader>
         <CardTitle className="text-xl">What matters</CardTitle>
         <CardDescription>The facts that change a bid. Each chip opens the quote it comes from.</CardDescription>

@@ -6,11 +6,22 @@ import { Suspense } from "react";
 import { FilePlus2, ShieldAlert } from "lucide-react";
 import { z } from "zod";
 
+import { NAV } from "@/components/app-shell/nav";
+import { PageNav } from "@/components/app-shell/page-nav";
 import { STATUS_META } from "@/components/evidence/status-badge";
+import { RiskBadge } from "@/components/tenders/markers";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { listDemoCapabilities, replaceReadiness } from "@/lib/db/queries/readiness";
-import { getTenderDetail, listSecurityPages, type RunRecord } from "@/lib/db/queries/tenders";
+import {
+  getLatestDecision,
+  getTenderDetail,
+  listCountyRisk,
+  listSecurityPages,
+  type CountyRiskListItem,
+  type RunRecord,
+} from "@/lib/db/queries/tenders";
+import { closingLabel, confidenceLabel, DECISION_LABEL, formatWhen, matchCountyName, sentenceCase, type DecisionChoice } from "@/lib/format/display";
 import { presentLeadCopy, sourceLabel } from "@/lib/leads/public-names";
 import { FIELD_STATUSES } from "@/lib/db/vocab";
 import { isWithdrawnByAddendum, matchRequirements } from "@/lib/readiness/match";
@@ -46,7 +57,7 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
   await connection();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
-  const detail = await getTenderDetail(id);
+  const [detail, decision, counties] = await Promise.all([getTenderDetail(id), getLatestDecision(id), listCountyRisk()]);
   if (!detail) notFound();
 
   const { opportunity, sources, runs, fields, pages, citedPages, fileUrls } = detail;
@@ -152,15 +163,37 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
     value: present(field.value, field.source_id),
     quote: present(field.quote, field.source_id),
   }));
+  const countyText =
+    viewFields.find((field) => field.key === "county" && field.value)?.value ?? opportunity.buyer_county;
+  const countyLabel = workbookLead ? presentLeadCopy(countyText) : countyText;
+  const matchedCounty = matchCountyName(countyLabel, counties.map((county) => county.county));
+  const countyRisk = counties.find((county) => county.county === matchedCounty);
+  const closingText = viewFields.find((field) => field.key === "closing_datetime" && field.value)?.value ?? null;
+  const closing = closingLabel(workbookLead ? presentLeadCopy(closingText) : closingText, opportunity.deadline_at);
+  const heading = sentenceCase(displayTitle);
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-col gap-8">
+      <PageNav
+        crumbs={[
+          { href: NAV.overview.href, label: NAV.overview.title },
+          { href: NAV.tenders.href, label: NAV.tenders.title },
+          { label: heading },
+        ]}
+      />
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 space-y-1">
-          <p className="text-sm font-medium text-muted-foreground">
-            {[displayReference, displayOrganization].filter(Boolean).join(" · ") || "Tender"}
+        <div className="min-w-0 space-y-2">
+          <h1 className="line-clamp-2 text-3xl font-semibold tracking-tight" title={displayTitle}>
+            {heading}
+          </h1>
+          <p className="break-words text-muted-foreground">
+            {[
+              displayOrganization ? sentenceCase(displayOrganization) : "Buyer not stated",
+              countyLabel ? sentenceCase(countyLabel) : "County not stated",
+              closing ? `Closes ${sentenceCase(closing)}` : "Closing date not stated",
+            ].join(" · ")}
           </p>
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{displayTitle}</h1>
+          {displayReference && <p className="text-sm text-muted-foreground">{displayReference}</p>}
         </div>
         {hasMainPdf && (
           <Button variant="outline" nativeButton={false} render={<Link href={`/tenders/new?addendum=${opportunity.id}`} />}>
@@ -168,6 +201,8 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
           </Button>
         )}
       </div>
+
+      <DecisionCard choice={decision} />
 
       <FieldsView
         fields={displayFields}
@@ -191,9 +226,12 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
         result={readiness}
         withdrawn={withdrawn.map((field) => field.value!.replace(/\s+/g, " ").slice(0, 90))}
       />
+      <PaymentCard risk={countyRisk} />
       {readinessError && (
         <p className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-red-800">{readinessError}</p>
       )}
+      </FieldsView>
+
       {summary.total > 0 && (
         <Card>
           <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-4">
@@ -231,8 +269,57 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
       )}
 
       {pdfSources.length > 0 && <ExtractionStatus opportunityId={opportunity.id} sources={sourceStatuses} />}
-      </FieldsView>
     </div>
+  );
+}
+
+function DecisionCard({ choice }: { choice: DecisionChoice | null }) {
+  return (
+    <Card>
+      <CardHeader className="gap-2">
+        <p className="text-sm text-muted-foreground">Decision</p>
+        <CardTitle className="text-3xl">{choice ? DECISION_LABEL[choice] : "No decision recorded"}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-muted-foreground">
+          {choice
+            ? "Recorded by the bid team."
+            : "The bid team has not recorded Bid, Bid higher, Ask for advance, or Skip."}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PaymentCard({ risk }: { risk: CountyRiskListItem | undefined }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-xl">Payment risk</CardTitle>
+        <CardDescription>
+          Unpaid bills for this buyer&apos;s county. This is not a forecast of when the buyer will pay.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {risk && risk.score !== null ? (
+          <>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div className="flex flex-col gap-2">
+                <span className="font-medium">{risk.county}</span>
+                <RiskBadge band={risk.band} />
+              </div>
+              <span className="text-3xl font-semibold tabular-nums">{risk.score.toFixed(1)}</span>
+            </div>
+            <p className="text-muted-foreground">
+              Controller of Budget, as at {formatWhen(risk.asOf) ?? risk.asOf}. Confidence:{" "}
+              {confidenceLabel(risk.confidence)}.
+            </p>
+          </>
+        ) : (
+          <p className="text-muted-foreground">No county score for this buyer.</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

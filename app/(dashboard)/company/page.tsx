@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 
 import { NAV } from "@/components/app-shell/nav";
+import { PageNav } from "@/components/app-shell/page-nav";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PAPER_GROUPS } from "@/lib/company/papers";
@@ -19,7 +20,8 @@ async function CompanyProfile() {
   const notHeld = company.documents.filter((document) => document.holding !== "have").length;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
+      <PageNav crumbs={[{ href: NAV.overview.href, label: NAV.overview.title }, { label: NAV.company.title }]} />
       <div className="space-y-1">
         <h1 className="text-3xl font-semibold tracking-tight">{company.legalName ?? company.name}</h1>
         <p className="text-lg text-muted-foreground">{NAV.company.description}</p>

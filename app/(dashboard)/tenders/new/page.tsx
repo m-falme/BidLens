@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
+import { NAV } from "@/components/app-shell/nav";
+import { PageNav } from "@/components/app-shell/page-nav";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { listAddendumTargets } from "@/lib/db/queries/tenders";
@@ -22,7 +24,14 @@ async function UploadFormLoader({ searchParams }: { searchParams: PageProps<"/te
 
 export default function NewTenderPage(props: PageProps<"/tenders/new">) {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+      <PageNav
+        crumbs={[
+          { href: NAV.overview.href, label: NAV.overview.title },
+          { href: NAV.tenders.href, label: NAV.tenders.title },
+          { label: "Upload" },
+        ]}
+      />
       <div className="space-y-1">
         <h1 className="text-3xl font-semibold tracking-tight">Upload a tender</h1>
         <p className="text-lg text-muted-foreground">

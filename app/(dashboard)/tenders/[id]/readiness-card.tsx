@@ -32,7 +32,9 @@ export function ReadinessCard({
         <p className="text-lg">
           <span className="font-semibold text-green-700 dark:text-green-400">{result.met} met</span>
           {", "}
-          <span className="font-semibold">{result.gaps} gaps</span>
+          <span className="font-semibold">
+            {result.gaps} gap{result.gaps === 1 ? "" : "s"}
+          </span>
           {", "}
           <span className="font-semibold text-red-700 dark:text-red-400">
             {result.couldDisqualify} could disqualify us
@@ -66,7 +68,7 @@ export function ReadinessCard({
                         <Badge className={cn("mt-0.5 h-6 shrink-0 px-2.5", MATCH_CLASS[item.match])}>
                           {readinessLabel(item)}
                         </Badge>
-                        <span className="min-w-0 flex-1">{item.text}</span>
+                        <span className="min-w-0 flex-1 break-words">{item.text}</span>
                         <span className="shrink-0 text-muted-foreground tabular-nums">
                           {item.pageNo ? `p.${item.pageNo}` : "no page"}
                         </span>

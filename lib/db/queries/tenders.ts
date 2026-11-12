@@ -1,6 +1,8 @@
 import "server-only";
 
 import { DEMO_COMPANY_NAME } from "@/lib/app-config";
+import { asDecision, closingLabel, matchCountyName, type DecisionChoice } from "@/lib/format/display";
+import { RISK_BANDS, type RiskBand } from "@/lib/risk/county-score";
 import type { ExtractedField, GroupStats } from "@/lib/tenders/extract-pipeline";
 
 import type { Database, Json } from "../database.types";
@@ -46,26 +48,115 @@ export interface TenderListItem {
   addenda: number;
   fieldCount: number;
   needsHuman: number;
+  county: string | null;
+  closing: string | null;
+  decision: DecisionChoice | null;
+  riskBand: RiskBand | null;
+  riskScore: number | null;
+}
+
+function asBand(value: string | null): RiskBand | null {
+  return RISK_BANDS.find((band) => band === value) ?? null;
+}
+
+function fieldValue(fields: readonly { key: string; value: string | null }[], key: string): string | null {
+  return fields.find((field) => field.key === key && field.value)?.value ?? null;
 }
 
 export async function listTenders(): Promise<TenderListItem[]> {
+  const db = getServiceClient();
+  const [{ data, error }, risk] = await Promise.all([
+    db
+      .from("opportunities")
+      .select(
+        "id, title, organization, reference, created_at, deadline_at, buyer_county, sources(kind, role), fields(status, key, value), decisions(choice, created_at)",
+      )
+      .eq("type", "procurement")
+      .order("created_at", { ascending: false }),
+    db.from("county_risk").select("county, band, score"),
+  ]);
+  if (error) fail("list tenders", error);
+  if (risk.error) fail("list county risk", risk.error);
+  const counties = risk.data.map((row) => row.county);
+  return data.map((o) => {
+    const countyName = matchCountyName(fieldValue(o.fields, "county") ?? o.buyer_county, counties);
+    const county = countyName ? risk.data.find((row) => row.county === countyName) : undefined;
+    const latest = [...o.decisions].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+    return {
+      id: o.id,
+      title: o.title,
+      organization: o.organization,
+      reference: o.reference,
+      created_at: o.created_at,
+      pdfSources: o.sources.filter((s) => s.kind === "pdf").length,
+      addenda: o.sources.filter((s) => s.role === "addendum").length,
+      fieldCount: o.fields.length,
+      needsHuman: o.fields.filter((f) => f.status === "needs_human").length,
+      county: countyName,
+      closing: closingLabel(fieldValue(o.fields, "closing_datetime"), o.deadline_at),
+      decision: asDecision(latest?.choice),
+      riskBand: asBand(county?.band ?? null),
+      riskScore: county?.score === null || county?.score === undefined ? null : Number(county.score),
+    };
+  });
+}
+
+export interface FieldLeadListItem {
+  id: string;
+  title: string;
+  location: string | null;
+  status: string;
+  owner: string | null;
+}
+
+export async function listFieldLeads(): Promise<FieldLeadListItem[]> {
   const { data, error } = await getServiceClient()
     .from("opportunities")
-    .select("id, title, organization, reference, created_at, sources(kind, role), fields(status)")
-    .eq("type", "procurement")
+    .select("id, title, location, status, owner")
+    .eq("type", "field")
     .order("created_at", { ascending: false });
-  if (error) fail("list tenders", error);
-  return data.map((o) => ({
-    id: o.id,
-    title: o.title,
-    organization: o.organization,
-    reference: o.reference,
-    created_at: o.created_at,
-    pdfSources: o.sources.filter((s) => s.kind === "pdf").length,
-    addenda: o.sources.filter((s) => s.role === "addendum").length,
-    fieldCount: o.fields.length,
-    needsHuman: o.fields.filter((f) => f.status === "needs_human").length,
-  }));
+  if (error) fail("list field leads", error);
+  return data;
+}
+
+export interface CountyRiskListItem {
+  county: string;
+  band: RiskBand;
+  score: number | null;
+  confidence: string;
+  asOf: string;
+}
+
+export async function getLatestDecision(opportunityId: string): Promise<DecisionChoice | null> {
+  const { data, error } = await getServiceClient()
+    .from("decisions")
+    .select("choice, created_at")
+    .eq("opportunity_id", opportunityId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) fail("load decision", error);
+  return asDecision(data[0]?.choice);
+}
+
+export async function listCountyRisk(): Promise<CountyRiskListItem[]> {
+  const { data, error } = await getServiceClient()
+    .from("county_risk")
+    .select("county, band, score, confidence, as_of")
+    .order("county");
+  if (error) fail("list county risk", error);
+  return data.flatMap((row) => {
+    const band = asBand(row.band);
+    if (!band) return [];
+    return [
+      {
+        county: row.county,
+        band,
+        score: row.score === null ? null : Number(row.score),
+        confidence: row.confidence,
+        asOf: row.as_of,
+      },
+    ];
+  });
 }
 
 export interface AddendumTarget {
@@ -102,7 +193,7 @@ export interface CitedPage {
 export interface TenderDetail {
   opportunity: Pick<
     Tables["opportunities"]["Row"],
-    "id" | "title" | "organization" | "reference" | "buyer_county" | "type" | "created_at"
+    "id" | "title" | "organization" | "reference" | "buyer_county" | "type" | "created_at" | "deadline_at"
   >;
   sources: SourceRecord[];
   runs: RunRecord[];
@@ -118,7 +209,7 @@ export async function getTenderDetail(opportunityId: string): Promise<TenderDeta
   const db = getServiceClient();
   const { data: opportunity, error } = await db
     .from("opportunities")
-    .select("id, title, organization, reference, buyer_county, type, created_at")
+    .select("id, title, organization, reference, buyer_county, type, created_at, deadline_at")
     .eq("id", opportunityId)
     .maybeSingle();
   if (error) fail("load tender", error);

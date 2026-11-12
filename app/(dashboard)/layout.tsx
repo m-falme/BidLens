@@ -8,7 +8,7 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
       <AppSidebar />
       <SidebarInset>
         <SiteHeader />
-        <div className="flex flex-1 flex-col p-6 md:p-8">{children}</div>
+        <div className="flex min-w-0 flex-1 flex-col p-4 sm:p-6 md:p-8">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   );

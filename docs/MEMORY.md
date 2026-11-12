@@ -49,7 +49,7 @@
 - 2026-11-12 (step 3 live): Listed models with the key. `gemini-2.5-flash` is closed to new users. `gemini-3.6-flash` accepts `additionalProperties: false` but the free tier is 20 requests/day and was used up probing. Live model is `gemini-3.5-flash-lite` (thinkingLevel `minimal`; 3.7/3.8 reject `minimal`). Gemini rejects `maxItems` on our array schema, so the 60-item cap is applied after the answer. SDK `maxRetries: 0`; one extra retry on a demand error. Link-styled buttons set `nativeButton={false}`.
 
 ## Next
-- Step 4 remaining, in order: (3) payment-risk card "Will this buyer pay on time?" using seeded county_risk (Nairobi 76.5 severe, Makueni 2.6 low) and margin.ts scenarios at 60/180/365/730, inputs labelled "Your assumptions" (margin 14%, loan rate 16%, contract value from the tender or KSh 8,000,000). Never say "example" or "demo". (4) rule-based recommendation in `lib/risk/recommend.ts` (LLM may rephrase reasons only) plus Approve/Override into `decisions`; (5) Vercel deploy. Do not re-extract. Supabase CLI needs `--remote`. Migration 0004 is applied and seeded.
+- Step 4 remaining: the profit table (margin.ts at 60/180/365/730) once a contract value is known, and a rule-based recommendation in `lib/risk/recommend.ts` with Approve/Override into `decisions`. The tender page already reserves the decision card and the county score. Do not invent a price or a bid. Do not re-extract. Supabase CLI needs `--remote`. Migration 0004 is applied and seeded. Then deploy if the public link is still missing.
 - Human correction of an extracted field (keep `original_value`) is still not built. Quote check already runs in extraction.
 
 ## Known issues / open questions
@@ -66,6 +66,7 @@
 - npm held back esbuild's postinstall (allowScripts); tsx works regardless.
 
 ## Log
+- 2026-11-12 11:40 — Product UI. Deep green, breadcrumbs and Back, active nav. Tender list splits uploaded tenders and imported leads (short title, decision, risk band, closing date). Tender page leads with the decision, then what matters, readiness and the county payment-risk score; evidence stays in closed accordions. Overview shows four headlines. No recommendation or profit table is invented: nothing is recorded, and no contract value is stated.
 - 2026-11-12 11:20 — Product wording. Sidebar says Bid team. Sources say Uploaded PDF / Imported lead. Analysis line is "Analysed in Ns · N facts found". Workbook SIM-* and "Example …" names are substituted on screen only.
 - 2026-11-12 10:50 — Step 4c: company documents checklist. Nairobi 3 met (self-declared), 13 gaps, 7 could disqualify, 10 to prepare. Makueni 5 met, 1 gap (bid bond), 1 could disqualify, 7 to prepare. NCA line still excluded.
 - 2026-11-12 10:20 — Step 4b: readiness on the tender page. Before company papers: Nairobi 0 met, 26 gaps, 10 could disqualify. NCA line excluded because the addendum removes it.

@@ -2,7 +2,7 @@
 > Cursor: update this at the end of every step. Keep it under ~60 lines. Newest first in "Log".
 
 ## Status
-- **Current step:** Step 9b done. The tender page is the five-stage workspace. Part 3 is company profile, evidence, trail, settings, upload, and the list tabs.
+- **Current step:** Step 9c committed. Remaining pages are in. The senior pre-release review (click-through, backend checks, uncommitted polish) has not started.
 - **Deployed URL:** —
 - **Repo:** https://github.com/m-falme/BidLens, branch `main`
 - **Gate:** Thu 12 Nov 2026 · assessment 14:00–15:30 EAT · cut 16:00
@@ -15,6 +15,7 @@
 - [ ] 5. Deployed public link with seeded demo data
 
 ## Decisions
+- 2026-11-13: Step 9c. Tenders and Leads are tabs on `/tenders`. `/leads` redirects to `/tenders?tab=leads`. Company profile is read-only (name plus service, tool and sector rows). The document checklist moved to Evidence library; `/company#doc-{id}` links now go to `/evidence#doc-{id}`. Decision trail is one page for every tender, with search and a tender filter. The tender page links there and no longer repeats the list. Trail wording is Interpretation / Compliance / Commercial reviewed. Stored stages stay `can_bid`, `can_comply`, `should_bid`. Settings is read-only gates plus workspace name, Africa/Nairobi and KES. No settings table and no Save.
 - 2026-11-13: Step 9b keeps the nine conflicts. Approve on Bid preparation only toasts the plan progress (“Bid preparation reviewed” when every item is done, or when there are none). It does not insert a stage. A note from Ask / correct is a new `stage_reviews` row on Interpretation, Compliance, or Commercial, so that stage then counts as reviewed. Recommendation and Bid preparation ask which of those three the note belongs to. The delay table calls `marginAtDelay` at 60, 180, 365 and 730 days. The county band row is highlighted. The rate stays 16%. `/proposals` redirects to `/tenders`. The tender page has no Back crumb; the top bar says Workspace / Tenders.
 - 2026-11-13: Overview replaces the three home cards. Stats, next actions, and team activity come from uploaded tenders, reviews, decisions, and company documents. Empty states when a value is missing. Assess viability is a row link to `#should_bid`. The profile mark is the company initials. Evidence, Decision trail, and Settings are in the sidebar; their pages only point at the data that already exists. Fonts are Source Serif 4 and DM Sans (next/font, no new package). Pill text stays 15px.
 - 2026-11-13: The action plan is code in `lib/plan` (no model call). Documents to get are missing or expired mandatory documents, not forms and not experience lines. One question per blank or needs-human key fact. The outline is evaluation criteria, then mandatory requirements. Clarification deadline and site visit appear only when an extracted field states that date. Owner, due date and done are upserted in `action_items` (0008, pushed). 0007 was already the expiry migration. Synonyms: bid bond = tender security = bid security, CR12 = list of directors, tax compliance = KRA compliance certificate. A service with a similar name still does not count.
@@ -56,7 +57,8 @@
 - 2026-11-12 (step 3 live): Listed models with the key. `gemini-2.5-flash` is closed to new users. `gemini-3.6-flash` accepts `additionalProperties: false` but the free tier is 20 requests/day and was used up probing. Live model is `gemini-3.5-flash-lite` (thinkingLevel `minimal`; 3.7/3.8 reject `minimal`). Gemini rejects `maxItems` on our array schema, so the 60-item cap is applied after the answer. SDK `maxRetries: 0`; one extra retry on a demand error. Link-styled buttons set `nativeButton={false}`.
 
 ## Next
-- Part 3: company profile, evidence library, decision trail, settings, upload, list/leads tabs, redirects, polish, then push `main`. The tender list still has its old Back crumb and the leads split. Do not add a stage value. Do not build paste text.
+- Senior pre-release review. Click the whole journey, then small safe fixes only. Do not change core logic, data, rules or the maths. Do not commit or push those polish edits. Leave them staged-ready and give the commit and push commands.
+- Deploy the public link if it is still missing. Supabase CLI needs `--remote`.
 - Deploy the public link if it is still missing. Supabase CLI needs `--remote`.
 - Human correction of an extracted field (keep `original_value`) is still not built. Quote check already runs in extraction.
 
@@ -74,6 +76,7 @@
 - npm held back esbuild's postinstall (allowScripts); tsx works regardless.
 
 ## Log
+- 2026-11-13 03:45 — Step 9c: tender tabs, company profile, evidence library, decision trail, settings, upload restyle. `/leads` redirects. 188 tests before the empty-trail footer tweak. Checked in the browser: company (74 capabilities), evidence (13 documents), empty trail, settings, leads tab, add tender.
 - 2026-11-13 02:40 — Step 9b: five-stage tender workspace, review footer, delay table, proposals redirect. Checked on Nairobi: pill stage 1 of 5, compliance table, commercial table with the Severe row highlighted, then the test figures were cleared. Ask / correct opens. `/proposals` lands on `/tenders`.
 - 2026-11-13 02:05 — Step 9a: cream theme, serif headings, sidebar (Workspace / Manage), top bar crumb, Overview from live counts. 179 tests. Tender workspace not restyled.
 - 2026-11-13 01:50 — Redesign map only. No UI yet. Waiting for OK on `docs/REDESIGN_MAP.md`.

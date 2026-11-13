@@ -1,25 +1,27 @@
+import Link from "next/link";
+
 import { formatReviewedAt } from "@/lib/tenders/stage-review";
 import type { TrailEntry } from "@/lib/recommendation/trail";
 
-export function DecisionTrail({ entries }: { entries: TrailEntry[] }) {
+/** The latest entry on this tender. The full list lives on the Decision trail page. */
+export function DecisionTrail({ tenderId, entries }: { tenderId: string; entries: TrailEntry[] }) {
+  const latest = entries[0];
   return (
-    <section className="flex flex-col gap-3" aria-label="Decision trail">
-      <h2 className="text-2xl font-semibold tracking-tight">Decision trail</h2>
-      {entries.length === 0 ? (
-        <p className="text-muted-foreground">No reviews or decisions yet.</p>
-      ) : (
-        <ol className="flex flex-col gap-4 border-l border-primary/30 pl-4">
-          {entries.map((entry, index) => (
-            <li key={`${entry.at}-${index}`} className="flex flex-col gap-1">
-              <p className="font-medium">{entry.what}</p>
-              <p className="text-muted-foreground">
-                {entry.who} · {formatReviewedAt(entry.at)}
-              </p>
-              {entry.note && <p>{entry.note}</p>}
-            </li>
-          ))}
-        </ol>
-      )}
+    <section
+      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-5 py-4"
+      aria-label="Decision trail"
+    >
+      <div className="min-w-0">
+        <h2 className="font-heading text-lg font-semibold">Decision trail</h2>
+        <p className="text-sm text-muted-foreground">
+          {latest
+            ? `${entries.length} ${entries.length === 1 ? "entry" : "entries"}. Latest: ${latest.what}, ${latest.who}, ${formatReviewedAt(latest.at)}.`
+            : "No reviews or decisions on this tender yet."}
+        </p>
+      </div>
+      <Link href={`/trail?tender=${tenderId}`} className="text-sm font-medium text-brand hover:underline">
+        Open the decision trail
+      </Link>
     </section>
   );
 }

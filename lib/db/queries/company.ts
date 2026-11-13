@@ -98,6 +98,31 @@ export async function getDemoCompanyProfile(): Promise<CompanyProfile> {
   return { name: company.name, legalName, documents };
 }
 
+export type CapabilityKind = "service" | "tool" | "sector";
+
+export interface CompanyCapability {
+  id: string;
+  name: string;
+  kind: CapabilityKind;
+}
+
+/** Services, tools and sectors stated in the company profile. Read-only on screen. */
+export async function listCompanyCapabilities(): Promise<CompanyCapability[]> {
+  const companyId = await getDemoCompanyId();
+  const { data, error } = await getServiceClient()
+    .from("capabilities")
+    .select("id, name, kind")
+    .eq("company_id", companyId)
+    .in("kind", ["service", "tool", "sector"])
+    .order("name");
+  if (error) fail("load capabilities", error);
+  return data.flatMap((row) =>
+    row.kind === "service" || row.kind === "tool" || row.kind === "sector"
+      ? [{ id: row.id, name: row.name, kind: row.kind }]
+      : [],
+  );
+}
+
 type DocumentRow = {
   id: string;
   name: string;

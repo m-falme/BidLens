@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
-import { addRequirementDocument } from "../../company/actions";
+import { addRequirementDocument } from "../../evidence/actions";
 
 export function AddDocumentButton({ requirement }: { requirement: string }) {
   const [error, setError] = useState<string | null>(null);

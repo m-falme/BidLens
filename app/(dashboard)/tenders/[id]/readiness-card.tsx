@@ -68,7 +68,7 @@ export function ReadinessCard({
                     {item.match === "met" && item.capabilityId && item.capabilityName ? (
                       <span className="flex flex-col gap-1">
                         <Link
-                          href={`/company#doc-${item.capabilityId}`}
+                          href={`/evidence#doc-${item.capabilityId}`}
                           className="font-medium text-brand underline-offset-4 hover:underline"
                         >
                           Met: you have {item.capabilityName}

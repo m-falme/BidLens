@@ -411,7 +411,7 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
         preparation={<ActionPlan tenderId={opportunity.id} rows={planRows} editable />}
       />
 
-      <DecisionTrail entries={trail} />
+      <DecisionTrail tenderId={opportunity.id} entries={trail} />
     </div>
   );
 }

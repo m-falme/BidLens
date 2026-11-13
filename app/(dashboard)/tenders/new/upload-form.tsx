@@ -120,8 +120,8 @@ export function UploadForm({
               disabled={value === "addendum" && targets.length === 0}
               aria-pressed={role === value}
               className={cn(
-                "rounded-lg border p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-                role === value ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted",
+                "rounded-xl border p-4 text-left transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
+                role === value ? "border-brand bg-brand/5 ring-1 ring-brand" : "border-border hover:bg-muted",
               )}
             >
               <span className="block font-medium">{title}</span>
@@ -139,14 +139,16 @@ export function UploadForm({
               id={`${inputId}-tender`}
               value={opportunityId}
               onChange={(e) => setOpportunityId(e.target.value)}
-              className="h-10 rounded-md border bg-background px-3 text-sm"
+              className="h-10 w-full min-w-0 rounded-lg border border-input bg-background px-3"
             >
-              {targets.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.reference ? `${t.reference} · ` : ""}
-                  {t.title}
-                </option>
-              ))}
+              {targets.map((t) => {
+                const label = `${t.reference ? `${t.reference} · ` : ""}${t.title}`;
+                return (
+                  <option key={t.id} value={t.id}>
+                    {label.length > 110 ? `${label.slice(0, 107)}…` : label}
+                  </option>
+                );
+              })}
             </select>
           </div>
         )}
@@ -161,13 +163,13 @@ export function UploadForm({
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         className={cn(
-          "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-10 text-center transition-colors",
-          dragging ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50",
+          "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-10 text-center transition-colors focus-within:ring-3 focus-within:ring-ring/50",
+          dragging ? "border-brand bg-brand/5" : "border-border hover:bg-muted/50",
           busy && "pointer-events-none opacity-60",
         )}
       >
         {file ? (
-          <FileText className="size-10 text-primary" aria-hidden />
+          <FileText className="size-10 text-brand" aria-hidden />
         ) : (
           <UploadCloud className="size-10 text-muted-foreground" aria-hidden />
         )}
@@ -211,7 +213,11 @@ export function UploadForm({
           <AlertTitle>This exact file was uploaded before</AlertTitle>
           <AlertDescription>
             It matches “{duplicate.originalName}”. Nothing new was created or merged.{" "}
-            {duplicate.opportunityId && <Link href={`/tenders/${duplicate.opportunityId}`}>Open the existing tender</Link>}
+            {duplicate.opportunityId && (
+              <Link href={`/tenders/${duplicate.opportunityId}`} className="font-medium text-brand underline">
+                Open the existing tender
+              </Link>
+            )}
           </AlertDescription>
         </Alert>
       )}

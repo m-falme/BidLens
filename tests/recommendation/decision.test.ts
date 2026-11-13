@@ -110,10 +110,11 @@ describe("decision trail", () => {
   it("lists reviews and decisions newest first, with who, what and the note", () => {
     const trail = decisionTrail(reviews, decisions);
     expect(trail.map((entry) => entry.what)).toEqual([
-      "Reviewed Should we bid?",
+      "Commercial reviewed",
       "Overrode the recommendation to Consider declining",
-      "Reviewed Can we bid?",
+      "Interpretation reviewed",
     ]);
+    expect(trail.map((entry) => entry.kind)).toEqual(["review", "override", "review"]);
     expect(trail[0]).toMatchObject({ who: "James", note: null });
     expect(trail[1]).toMatchObject({ who: "Amina", note: "The bond cannot be raised." });
     expect(latestBidDecision(decisions)?.finalLabel).toBe("consider_declining");

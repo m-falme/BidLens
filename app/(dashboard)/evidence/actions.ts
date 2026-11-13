@@ -28,7 +28,9 @@ export async function saveCompanyDocument(input: unknown): Promise<DocumentActio
   try {
     const expiresOn = parsed.data.neverExpires ? null : parsed.data.expiresOn || null;
     await updateCompanyDocument(parsed.data.id, parsed.data.holding, expiresOn, parsed.data.neverExpires);
+    revalidatePath("/evidence");
     revalidatePath("/company");
+    revalidatePath("/");
     revalidatePath("/tenders", "layout");
     return { ok: true };
   } catch (error) {
@@ -43,7 +45,9 @@ export async function addRequirementDocument(input: unknown): Promise<DocumentAc
   if (!parsed.success) return { ok: false, error: "That requirement could not be added." };
   try {
     await insertOtherDocument(parsed.data.requirement);
+    revalidatePath("/evidence");
     revalidatePath("/company");
+    revalidatePath("/");
     revalidatePath("/tenders", "layout");
     return { ok: true };
   } catch (error) {

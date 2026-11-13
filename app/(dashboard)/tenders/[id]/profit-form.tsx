@@ -6,7 +6,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatKes, formatMarginPct, type DelayTableRow } from "@/lib/recommendation/profit";
+import { formatKes, formatMarginPct, profitIdleMessage, type DelayTableRow } from "@/lib/recommendation/profit";
 import { cn } from "@/lib/utils";
 
 import { saveTenderFiguresAction } from "./actions";
@@ -37,6 +37,7 @@ export function ProfitForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const inputsBlank = value.trim() === "" || cost.trim() === "";
 
   function save() {
     setError(null);
@@ -86,8 +87,10 @@ export function ProfitForm({
           />
         </div>
       </div>
-      {rows === null ? (
-        <p className="text-muted-foreground">{lateNote ?? emptyMessage}</p>
+      {rows === null || inputsBlank ? (
+        <p className="text-muted-foreground">
+          {inputsBlank ? emptyMessage : profitIdleMessage({ contractValue: value, deliveryCost: cost, lateNote })}
+        </p>
       ) : (
         <div className="flex flex-col gap-3">
           {onTimeLabel && <p>{onTimeLabel}</p>}

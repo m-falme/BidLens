@@ -16,18 +16,18 @@ import { saveActionItem } from "./actions";
 const SECTIONS: readonly { id: PlanSection; title: string; empty: string }[] = [
   {
     id: "documents",
-    title: "Documents to get",
-    empty: "No mandatory document is missing or expired.",
+    title: "Get",
+    empty: "No document to get.",
   },
   {
     id: "questions",
-    title: "Questions to ask the buyer",
+    title: "Ask the buyer",
     empty: "No key fact is blank or marked needs a person.",
   },
   {
     id: "outline",
-    title: "Response outline",
-    empty: "No evaluation criteria or mandatory requirements were extracted.",
+    title: "Prepare",
+    empty: "No form or response to prepare.",
   },
   {
     id: "dates",
@@ -169,8 +169,9 @@ function ActionRow({ tenderId, row }: { tenderId: string; row: PlanRow }) {
             type="checkbox"
             className="size-5 accent-primary"
             checked={done}
-            disabled={pending}
+            disabled={pending || row.missing}
             onChange={(event) => {
+              if (row.missing) return;
               const next = event.target.checked;
               setDone(next);
               persist({ ownerName: owner, dueOn: due, done: next });

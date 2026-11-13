@@ -9,8 +9,7 @@ import type { FieldStatus, SourceRole } from "@/lib/db/vocab";
 import { spelledCountWithUnit } from "@/lib/format/display";
 import type { AddendumConflict } from "@/lib/tenders/addendum-conflicts";
 import type { BidSecurityConflict } from "@/lib/tenders/document-conflicts";
-import { fieldLabel } from "@/lib/tenders/field-catalog";
-import type { MatterPoint } from "@/lib/tenders/what-matters";
+import { ADDENDUM_FIELD_GROUPS, MAIN_FIELD_GROUPS, fieldLabel } from "@/lib/tenders/field-catalog";
 import { decideFieldStatus, STATUS_REASON_TEXT } from "@/lib/verify/field-status";
 import { findQuoteSpan } from "@/lib/verify/quote-check";
 
@@ -179,57 +178,135 @@ function QuoteLine({
   );
 }
 
+const KEY_FACT_KEYS = ["buyer", "closing_datetime", "bid_security", "tender_validity", "submission_method"];
+
+const GROUP_LABEL: Record<string, string> = {
+  identity: "Reference and contact",
+  submission: "Submission",
+  securities: "Performance security",
+  payment: "Payment",
+  eligibility: "Eligibility",
+  mandatory: "Mandatory requirements",
+  scope: "Technical scope",
+  evaluation: "Evaluation",
+  addendum_changes: "Addendum changes",
+  other: "Other",
+};
+
+const KEY_GROUP = new Map<string, string>();
+for (const group of [...MAIN_FIELD_GROUPS, ...ADDENDUM_FIELD_GROUPS]) {
+  for (const key of group.keys) {
+    if (!KEY_GROUP.has(key)) KEY_GROUP.set(key, group.id);
+  }
+}
+
+function keyFactRank(key: string): number {
+  const index = KEY_FACT_KEYS.indexOf(key);
+  return index === -1 ? KEY_FACT_KEYS.length : index;
+}
+
+function isKeyFact(field: ViewField): boolean {
+  return KEY_FACT_KEYS.includes(field.key) || field.status === "blank_in_source";
+}
+
 const CONFLICT_NOTE: Record<AddendumConflict["kind"], string> = {
   value_differs: "The addendum and the main tender state different values. Both are kept.",
   addendum_only: "Only the addendum states this. Nothing was merged.",
   addendum_change: "The addendum changes this. Both quotes stay until a person decides.",
 };
 
+function FieldArticle({ field, onOpen }: { field: ViewField; onOpen: (field: ViewField) => void }) {
+  return (
+    <article className="flex flex-wrap items-start justify-between gap-4 border-b border-border px-5 py-4 last:border-b-0">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2 font-semibold">
+          {fieldLabel(field.key)}
+          <StatusBadge status={field.status} />
+        </div>
+        <p className="mt-1">
+          <ValueText field={field} />
+        </p>
+        {field.affects_key && <p className="mt-1 text-muted-foreground">Affects: {fieldLabel(field.affects_key)}</p>}
+        <QuoteLine quote={field.quote} pageNo={field.page_no} onOpen={() => onOpen(field)} />
+      </div>
+      <p className="text-sm text-muted-foreground tabular-nums">{Math.round(field.confidence * 100)}%</p>
+    </article>
+  );
+}
+
+function SectionHeading({ children }: { children: string }) {
+  return (
+    <h2 className="px-5 pt-4 text-sm font-semibold tracking-[0.14em] text-muted-foreground uppercase">{children}</h2>
+  );
+}
+
 export function FieldsView({
   fields,
   sources,
   conflicts,
   pageTexts,
-  matters,
   securityConflict,
+  unreadNotice,
 }: {
   fields: ViewField[];
   sources: ViewSource[];
   conflicts: AddendumConflict[];
   /** `${source_id}:${page_no}` → page text, for every cited page. */
   pageTexts: Record<string, string>;
-  matters: MatterPoint[];
   securityConflict: BidSecurityConflict | null;
+  /** Pages with no text layer, already phrased. Null when every page could be read. */
+  unreadNotice: string | null;
 }) {
   const [open, setOpen] = useState<ViewField | null>(null);
   const byId = new Map(fields.map((field) => [field.id, field]));
   const sourceById = new Map(sources.map((source) => [source.id, source]));
+  const indexed = fields.map((field, index) => ({ field, index }));
+  const keyFacts = indexed
+    .filter(({ field }) => isKeyFact(field))
+    .sort((a, b) => keyFactRank(a.field.key) - keyFactRank(b.field.key) || a.index - b.index)
+    .map(({ field }) => field);
+  const shown = new Set(keyFacts.map((field) => field.id));
+  const needsHuman = fields.filter((field) => field.status === "needs_human" && !shown.has(field.id));
+  for (const field of needsHuman) shown.add(field.id);
+  const rest = fields.filter((field) => !shown.has(field.id));
+  const grouped = new Map<string, ViewField[]>();
+  for (const field of rest) {
+    const id = KEY_GROUP.get(field.key) ?? "other";
+    const list = grouped.get(id) ?? [];
+    list.push(field);
+    grouped.set(id, list);
+  }
+  const groupIds = [
+    ...MAIN_FIELD_GROUPS.map((group) => group.id),
+    "addendum_changes",
+    "other",
+  ].filter((id) => grouped.has(id));
+  const empty = keyFacts.length === 0 && needsHuman.length === 0 && rest.length === 0 && !securityConflict && conflicts.length === 0;
 
   return (
     <div>
-      {matters.length === 0 && fields.length === 0 && !securityConflict && conflicts.length === 0 ? (
+      {unreadNotice && <p className="px-5 pt-4 text-muted-foreground">{unreadNotice}</p>}
+      {empty ? (
         <p className="px-5 py-4 text-muted-foreground">No key facts were extracted from this tender yet.</p>
       ) : (
         <>
-          {matters.map((point) => (
-            <article key={point.id} className="border-b border-border px-5 py-4">
-              <p>{point.text}</p>
-              {point.fieldIds.length > 0 && (
-                <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-                  {point.fieldIds.map((id) => {
-                    const field = byId.get(id);
-                    if (!field) return null;
-                    return (
-                      <span key={id} className="inline-flex items-center gap-2">
-                        <StatusBadge status={field.status} />
-                        <PageLink pageNo={field.page_no} onClick={() => setOpen(field)} />
-                      </span>
-                    );
-                  })}
-                </p>
-              )}
-            </article>
-          ))}
+          {keyFacts.length > 0 && (
+            <section>
+              <SectionHeading>Key facts</SectionHeading>
+              {keyFacts.map((field) => (
+                <FieldArticle key={field.id} field={field} onOpen={setOpen} />
+              ))}
+            </section>
+          )}
+
+          {needsHuman.length > 0 && (
+            <section>
+              <SectionHeading>Needs a person to check</SectionHeading>
+              {needsHuman.map((field) => (
+                <FieldArticle key={field.id} field={field} onOpen={setOpen} />
+              ))}
+            </section>
+          )}
 
           {securityConflict && (
             <article className="border-b border-border px-5 py-4">
@@ -296,24 +373,20 @@ export function FieldsView({
             );
           })}
 
-          {fields.map((field) => (
-            <article key={field.id} className="flex flex-wrap items-start justify-between gap-4 border-b border-border px-5 py-4 last:border-b-0">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2 font-semibold">
-                  {fieldLabel(field.key)}
-                  <StatusBadge status={field.status} />
-                </div>
-                <p className="mt-1">
-                  <ValueText field={field} />
-                </p>
-                {field.affects_key && (
-                  <p className="mt-1 text-muted-foreground">Affects: {fieldLabel(field.affects_key)}</p>
-                )}
-                <QuoteLine quote={field.quote} pageNo={field.page_no} onOpen={() => setOpen(field)} />
-              </div>
-              <p className="text-sm text-muted-foreground tabular-nums">{Math.round(field.confidence * 100)}%</p>
-            </article>
-          ))}
+          {groupIds.map((id) => {
+            const items = grouped.get(id) ?? [];
+            return (
+              <details key={id} className="border-b border-border">
+                <summary className="cursor-pointer px-5 py-3 font-semibold">
+                  {GROUP_LABEL[id] ?? id}
+                  <span className="ml-2 font-normal text-muted-foreground">{items.length}</span>
+                </summary>
+                {items.map((field) => (
+                  <FieldArticle key={field.id} field={field} onOpen={setOpen} />
+                ))}
+              </details>
+            );
+          })}
         </>
       )}
 

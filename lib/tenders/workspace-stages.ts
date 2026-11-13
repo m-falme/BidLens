@@ -1,15 +1,28 @@
 import type { ReviewStage } from "./stage-review";
 
-/** Five tabs. Only the first three write `stage_reviews`. Hashes are the old step ids. */
+/** Five tabs. Only the first three write `stage_reviews`. The address hash is the tab id. */
 export const WORKSPACE_TABS = [
-  { id: "interpretation", hash: "can_bid", label: "Interpretation", review: "can_bid" },
-  { id: "compliance", hash: "can_comply", label: "Compliance", review: "can_comply" },
-  { id: "commercial", hash: "should_bid", label: "Commercial", review: "should_bid" },
-  { id: "recommendation", hash: "recommendation", label: "Recommendation", review: null },
-  { id: "preparation", hash: "proceed", label: "Bid preparation", review: null },
+  { id: "interpretation", label: "Interpretation", review: "can_bid" },
+  { id: "compliance", label: "Compliance", review: "can_comply" },
+  { id: "commercial", label: "Commercial", review: "should_bid" },
+  { id: "recommendation", label: "Recommendation", review: null },
+  { id: "preparation", label: "Bid preparation", review: null },
 ] as const;
 
 export type WorkspaceTabId = (typeof WORKSPACE_TABS)[number]["id"];
+
+/** Old step hashes. They still open the stage, then the address is rewritten to the tab id. */
+const LEGACY_HASHES: Record<string, WorkspaceTabId> = {
+  can_bid: "interpretation",
+  can_comply: "compliance",
+  should_bid: "commercial",
+  proceed: "preparation",
+};
+
+export function isLegacyHash(hash: string): boolean {
+  const bare = hash.replace(/^#/, "").trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(LEGACY_HASHES, bare);
+}
 
 export interface WorkspaceApproval {
   canBid: boolean;
@@ -46,13 +59,18 @@ export function reviewPill(approval: WorkspaceApproval): string {
   return `IN REVIEW · STAGE ${reviewStageNumber(approval)} OF ${WORKSPACE_TABS.length}`;
 }
 
-/** The open tab, or the recorded decision once a bid decision exists. */
-export function stageHeading(tab: WorkspaceTabId, decisionLabel: string | null): string {
-  if (decisionLabel) return `Decided: ${decisionLabel}`;
+/** The open tab: "Stage 2 of 5 · Compliance". */
+export function stageHeading(tab: WorkspaceTabId): string {
   const index = WORKSPACE_TABS.findIndex((item) => item.id === tab);
   const current = WORKSPACE_TABS[index] ?? WORKSPACE_TABS[0];
   const number = index === -1 ? 1 : index + 1;
   return `Stage ${number} of ${WORKSPACE_TABS.length} · ${current.label}`;
+}
+
+/** Shown beside the open tab once a bid decision exists. */
+export function decisionHeading(decisionLabel: string | null): string | null {
+  if (!decisionLabel) return null;
+  return `Decided: ${decisionLabel}`;
 }
 
 export type StageMark = "done" | "current" | "waiting";
@@ -65,8 +83,11 @@ export function stageMark(id: WorkspaceTabId, approval: WorkspaceApproval): Stag
 }
 
 export function tabFromHash(hash: string): WorkspaceTabId | null {
-  const bare = hash.replace(/^#/, "");
-  return WORKSPACE_TABS.find((tab) => tab.hash === bare)?.id ?? null;
+  const bare = hash.replace(/^#/, "").trim().toLowerCase();
+  if (!bare || bare.length > 40) return null;
+  const exact = WORKSPACE_TABS.find((tab) => tab.id === bare);
+  if (exact) return exact.id;
+  return LEGACY_HASHES[bare] ?? null;
 }
 
 /** `?stage=` on a tender. Accepts the tab id, the old hash, or the stage name. */
@@ -74,15 +95,14 @@ export function tabFromStage(value: string | null | undefined): WorkspaceTabId |
   if (!value) return null;
   const bare = value.trim().replace(/^#/, "");
   if (!bare || bare.length > 40) return null;
-  const exact = WORKSPACE_TABS.find((tab) => tab.id === bare || tab.hash === bare);
-  if (exact) return exact.id;
+  const fromHash = tabFromHash(bare);
+  if (fromHash) return fromHash;
   const lower = bare.toLowerCase();
   return WORKSPACE_TABS.find((tab) => tab.label.toLowerCase() === lower)?.id ?? null;
 }
 
 export function hashForTab(id: WorkspaceTabId): string {
-  const tab = WORKSPACE_TABS.find((item) => item.id === id);
-  return tab?.hash ?? "can_bid";
+  return id;
 }
 
 export function nextTab(id: WorkspaceTabId): WorkspaceTabId | null {
@@ -112,9 +132,8 @@ export function approveToast(id: WorkspaceTabId): string {
   return `${tabLabel(id)} approved. Next: ${tabLabel(next)}.`;
 }
 
-/** Bid preparation does not write a stage. The toast is the plan progress. */
+/** Bid preparation does not write a stage. The toast is how many items the team has ticked. */
 export function preparationToast(done: number, total: number): string {
-  const missing = total - done;
-  if (total === 0 || missing === 0) return "Bid preparation reviewed";
-  return `${done} of ${total} · ${missing} missing`;
+  if (total === 0 || done === total) return "Bid preparation reviewed";
+  return `${done} of ${total}`;
 }

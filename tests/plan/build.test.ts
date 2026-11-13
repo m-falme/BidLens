@@ -83,6 +83,7 @@ describe("buildActionPlan", () => {
     }),
     field({ key: "performance_security", status: "blank_in_source", pageNo: 207 }),
     field({ key: "bid_security", status: "source_confirmed", value: "KSh 500,000", pageNo: 2 }),
+    field({ key: "tender_validity", status: "source_confirmed", value: "120 days", pageNo: 3 }),
     field({ key: "late_payment_interest", status: "needs_human", pageNo: 180, label: "Interest on late payment" }),
     field({
       key: "evaluation_criterion",
@@ -135,30 +136,27 @@ describe("buildActionPlan", () => {
     ]);
   });
 
-  it("orders the outline as evaluation criteria, then mandatory requirements, each with its page", () => {
+  it("prepares forms and the response, and does not repeat the compliance list", () => {
     expect(plan.outline.map((item) => [item.title, item.pageNo, item.detail])).toEqual([
-      ["Technical evaluation", 10, "Evaluation criterion"],
-      ["Financial evaluation", 40, "Evaluation criterion"],
-      ["Copy of valid Tax Compliance Certificate", 30, "Mandatory requirement"],
-      ["Copy of the bid bond", 7, "Mandatory requirement"],
-      ["Duly filled form of tender", 8, "Mandatory requirement"],
-      ["Certificate of incorporation", 9, "Mandatory requirement"],
-      ["Provide reference sites for three similar contracts", 15, "Mandatory requirement"],
+      ["Duly filled form of tender", 8, "Form"],
+      ["Technical evaluation", 10, "Response"],
+      ["Financial evaluation", 40, "Response"],
     ]);
+    expect(plan.outline.map((item) => item.title)).not.toContain("Copy of valid Tax Compliance Certificate");
+    expect(plan.outline.map((item) => item.title)).not.toContain("Certificate of incorporation");
   });
 
-  it("shows the submission deadline, clarification deadline and site visit with days left", () => {
+  it("shows the closing date and time, bid validity and bond validity", () => {
     expect(plan.dates.map((item) => item.title)).toEqual([
-      "Submission deadline",
-      "Clarification deadline",
-      "Site visit",
+      "Closing date and time",
+      "Bid validity",
+      "Bond validity",
     ]);
     expect(plan.dates[0].detail).toBe("20 November 2026 at 11:00 a.m. 7 days left.");
     expect(plan.dates[0].pageNo).toBe(2);
-    expect(plan.dates[1].detail).toContain("5 days left.");
-    expect(plan.dates[1].pageNo).toBe(4);
-    expect(plan.dates[2].detail).toContain("2 days left.");
-    expect(plan.dates[2].pageNo).toBe(6);
+    expect(plan.dates[1].detail).toBe("120 days.");
+    expect(plan.dates[1].pageNo).toBe(3);
+    expect(plan.dates[2].detail).toBe("Not stated in the extracted facts.");
     expect(daysLeftLabel(1)).toBe("1 day left.");
     expect(daysLeftLabel(null)).toBe("Days left are not shown.");
   });
@@ -177,7 +175,11 @@ describe("buildActionPlan", () => {
       deadlineAt: null,
       asOf: AS_OF,
     });
-    expect(onlyClosing.dates.map((item) => item.title)).toEqual(["Submission deadline"]);
+    expect(onlyClosing.dates.map((item) => item.title)).toEqual([
+      "Closing date and time",
+      "Bid validity",
+      "Bond validity",
+    ]);
   });
 
   it("keeps an owner and a tick on the same item key", () => {
@@ -185,21 +187,30 @@ describe("buildActionPlan", () => {
     const second = buildActionPlan({ requirements, fields, deadlineAt: null, asOf: AS_OF }).items.map((item) => item.key);
     expect(second).toEqual(first);
     const rows = mergeSaved(plan, [
-      { itemKey: plan.documents[0].key, ownerName: "Amina", dueOn: "2026-11-18", done: true },
+      { itemKey: plan.documents[1].key, ownerName: "Amina", dueOn: "2026-11-18", done: true },
+      { itemKey: plan.documents[0].key, ownerName: "James", dueOn: null, done: true },
       { itemKey: "gone", ownerName: "James", dueOn: null, done: true },
     ]);
-    expect(rows[0]).toMatchObject({ ownerName: "Amina", dueOn: "2026-11-18", done: true });
-    expect(rows[1]).toMatchObject({ ownerName: "", dueOn: "", done: false });
+    expect(rows[1]).toMatchObject({ ownerName: "Amina", dueOn: "2026-11-18", done: true, missing: false });
+    expect(rows[0]).toMatchObject({ ownerName: "James", done: false, missing: true });
     const progress = planProgress(rows);
-    expect(progress.label).toBe(`1 of ${rows.length} · ${rows.length - 1} missing`);
+    expect(progress.done).toBe(1);
+    expect(progress.label).toBe(`1 of ${rows.length}`);
     expect(preparationIsDone(progress)).toBe(false);
-    const marked = rows.map((row, index) => ({ ...row, done: index < 3 }));
-    expect(planProgress(marked).label).toBe(`3 of ${marked.length} · ${marked.length - 3} missing`);
+    const marked = rows.map((row, index) => ({ ...row, done: index < 3 && !row.missing }));
+    expect(planProgress(marked).label).toBe(`2 of ${marked.length}`);
     const nineteen = Array.from({ length: 20 }, (_, index) => ({ done: index < 19 }));
-    expect(planProgress(nineteen)).toEqual({ done: 19, total: 20, missing: 1, label: "19 of 20 · 1 missing" });
+    expect(planProgress(nineteen)).toEqual({ done: 19, total: 20, missing: 0, label: "19 of 20" });
     const allDone = nineteen.map(() => ({ done: true }));
-    expect(planProgress(allDone)).toEqual({ done: 20, total: 20, missing: 0, label: "20 of 20 done" });
+    expect(planProgress(allDone)).toEqual({ done: 20, total: 20, missing: 0, label: "20 of 20" });
     expect(preparationIsDone(planProgress(allDone))).toBe(true);
+    expect(planProgress([{ done: true, missing: true }])).toEqual({
+      done: 0,
+      total: 1,
+      missing: 1,
+      label: "0 of 1",
+    });
+    expect(planProgress([])).toEqual({ done: 0, total: 0, missing: 0, label: "0 of 0" });
   });
 
   it("uses the addendum closing date when one is present", () => {
@@ -240,6 +251,27 @@ describe("buildActionPlan", () => {
     expect(dated.documents[0].detail).toBe("Missing.");
     expect(dated.documents[0].detail).not.toContain("Company record");
     expect(dated.documents[0].detail).not.toContain(line);
+  });
+
+  it("keeps bid bond delivery steps in Get and the bond period on Key dates", () => {
+    const text =
+      "13. Attach a bid bond of Kshs. 800,000.00 from a CBK-licensed bank or IRA-regulated insurer and must remain valid for 170 days after the opening date of the tender. Note: A clear colored scanned copy must be uploaded into the IFMIS tender portal. Additionally, the original bid bond must be delivered physically to the office of the Chief Officer before closing.";
+    const dated = buildActionPlan({
+      requirements: [requirement({ text, match: "missing", pageNo: 13 })],
+      fields: [],
+      deadlineAt: null,
+      asOf: AS_OF,
+    });
+    expect(dated.documents.map((item) => item.detail)).toEqual(["Missing.", "Bid bond delivery.", "Bid bond delivery."]);
+    expect(dated.documents[1].title).toContain("uploaded into the IFMIS");
+    expect(dated.documents[2].title).toContain("delivered physically");
+    expect(dated.documents[0].missing).toBe(true);
+    expect(dated.documents[1].missing).toBe(false);
+    expect(dated.outline).toEqual([]);
+    const bond = dated.dates.find((item) => item.title === "Bond validity");
+    expect(bond?.detail).toBe("must remain valid for 170 days after the opening date of the tender.");
+    expect(bond?.pageNo).toBe(13);
+    expect(bond?.detail).not.toContain("IFMIS");
   });
 });
 

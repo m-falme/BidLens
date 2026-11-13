@@ -5,7 +5,6 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { z } from "zod";
 
-import { STATUS_META } from "@/components/evidence/status-badge";
 import { RiskBadge } from "@/components/tenders/markers";
 import { Button } from "@/components/ui/button";
 import { getWorkspaceName } from "@/lib/db/queries/company";
@@ -23,15 +22,16 @@ import {
 import {
   closingLabel,
   confidenceLabel,
+  countyScoreLine,
   countyScoreReason,
   formatWhen,
   matchCountyName,
   RISK_LABEL,
   sentenceCase,
+  spelledCountWithUnit,
 } from "@/lib/format/display";
 import { presentLeadCopy, sourceLabel } from "@/lib/leads/public-names";
 import { buildActionPlan, mergeSaved, planProgress, preparationIsDone, type PlanField } from "@/lib/plan/build";
-import { FIELD_STATUSES } from "@/lib/db/vocab";
 import {
   FINANCING_RATE,
   PROFIT_EMPTY,
@@ -42,7 +42,7 @@ import {
 } from "@/lib/recommendation/profit";
 import { isWithdrawnByAddendum, matchRequirements } from "@/lib/readiness/match";
 import { daysUntilClosing, preferredClosing } from "@/lib/recommendation/deadline";
-import { RECOMMENDATION_LABEL, RULE_TEXT } from "@/lib/recommendation/labels";
+import { RECOMMENDATION_LABEL } from "@/lib/recommendation/labels";
 import { isClarificationKey, recommend } from "@/lib/recommendation/recommend";
 import { decisionTrail, latestBidDecision } from "@/lib/recommendation/trail";
 import type { GroupStats } from "@/lib/tenders/extract-pipeline";
@@ -50,8 +50,19 @@ import { findBidSecurityConflicts } from "@/lib/tenders/document-conflicts";
 import type { WorkspaceTabId } from "@/lib/tenders/workspace-stages";
 import { ADDENDUM_FIELD_GROUPS, FIELD_SPECS, MAIN_FIELD_GROUPS } from "@/lib/tenders/field-catalog";
 import { needsHumanReview, summarizeReview } from "@/lib/tenders/review";
-import { commercialFinding, complianceFinding, interpretationFinding, latestByStage } from "@/lib/tenders/stage-review";
-import { buildWhatMatters } from "@/lib/tenders/what-matters";
+import { PARTS_ROUNDED_NOTE } from "@/lib/risk/county-score";
+import {
+  becauseBullets,
+  carriedFrom,
+  commercialFinding,
+  complianceFinding,
+  interpretationFinding,
+  latestByStage,
+  preparationFinding,
+  stageApprovalLine,
+  unreadPagesNotice,
+  unresolvedClause,
+} from "@/lib/tenders/stage-review";
 import { ActionPlan } from "./action-plan";
 import { DecisionTrail } from "./decision-trail";
 import { ExtractionStatus, type SourceStatus } from "./extraction-status";
@@ -154,19 +165,6 @@ async function TenderDetail({
   const securityConflict = findBidSecurityConflicts(
     securityPages.map((page) => ({ pageNo: page.page_no, text: page.text })),
   );
-  const matters = buildWhatMatters({
-    fields: viewFields.map((field) => ({
-      id: field.id,
-      key: field.key,
-      value: field.value,
-      status: field.status,
-      page_no: field.page_no,
-      role: field.source_id ? (sourceRoles.get(field.source_id) ?? "main") : "main",
-    })),
-    conflict: securityConflict,
-    needsHuman: summary.byStatus.needs_human,
-    addendumConflicts: summary.conflicts.length,
-  });
   const roleOf = (sourceId: string | null) => (sourceId ? (sourceRoles.get(sourceId) ?? "main") : "main");
   const changeTexts = viewFields.flatMap((field) =>
     field.key === "addendum_change" && field.value ? [field.value] : [],
@@ -175,6 +173,11 @@ async function TenderDetail({
     (field) => field.key === "mandatory_requirement" && field.value && roleOf(field.source_id) === "main",
   );
   const withdrawn = mandatory.filter((field) => isWithdrawnByAddendum(field.value!, changeTexts));
+  const needsHumanTexts = mandatory.flatMap((field) =>
+    field.status === "needs_human" && field.value && !isWithdrawnByAddendum(field.value, changeTexts)
+      ? [field.value.replace(/\s+/g, " ").trim()]
+      : [],
+  );
   const readiness = matchRequirements(
     mandatory
       .filter((field) => !isWithdrawnByAddendum(field.value!, changeTexts))
@@ -278,31 +281,79 @@ async function TenderDetail({
     countyRisk && countyRisk.score !== null
       ? commercialFinding({ county: countyRisk.county, score: countyRisk.score, bandLabel: RISK_LABEL[countyRisk.band] })
       : commercialFinding(null);
-  const countLine =
-    summary.total > 0
-      ? ` ${summary.total} fields: ${FIELD_STATUSES.map((status) => `${summary.byStatus[status]} ${STATUS_META[status].label}`).join(", ")}.`
-      : "";
-  const heads: Record<WorkspaceTabId, { title: string; summary: string }> = {
-    interpretation: {
-      title: "Interpretation",
-      summary: `${interpretationFinding({ facts: summary.total, needsHuman: summary.byStatus.needs_human })}${countLine}`,
-    },
-    compliance: {
-      title: "Compliance",
-      summary: complianceFinding({
-        met: readiness.met,
-        gaps: readiness.gaps,
-        couldDisqualify: readiness.couldDisqualify,
-        toPrepare: readiness.toPrepare,
-        total: readiness.items.length,
-      }),
-    },
-    commercial: { title: "Commercial", summary: commercial },
-    recommendation: {
-      title: "Recommendation",
-      summary: `${RECOMMENDATION_LABEL[recommendation.label]}. ${RULE_TEXT[recommendation.rule]}.`,
-    },
-    preparation: { title: "Bid preparation", summary: plan.label },
+  const interpretationAnswer = interpretationFinding({
+    facts: summary.total - summary.byStatus.blank_in_source,
+    needsHuman: summary.byStatus.needs_human,
+    unfilled: summary.byStatus.blank_in_source,
+  });
+  const unreadHit = sourceStatuses.filter((source) => source.needsOcrPages.length > 0);
+  const unreadNotice =
+    unreadHit.length === 0
+      ? null
+      : unreadHit.length === 1
+        ? unreadPagesNotice(unreadHit[0].needsOcrPages)
+        : unreadHit
+            .flatMap((source) => {
+              const line = unreadPagesNotice(source.needsOcrPages);
+              return line ? [`${source.name}: ${line}`] : [];
+            })
+            .join(" ");
+  const commercialFacts = (
+    [
+      ["bid_security", "Bid security"],
+      ["advance_payment", "Advance payment"],
+      ["payment_days", "Payment period"],
+      ["late_payment_interest", "Late-payment interest"],
+    ] as const
+  ).map(([key, label]) => ({ label, ...commercialFactValue(displayFields, key, sourceRoles) }));
+  const openGaps = readiness.items.filter((item) => item.match === "missing" || item.match === "unclear");
+  const namedGap =
+    openGaps.find((item) => /bid bond|tender security|bid security/i.test(item.text)) ??
+    openGaps.find((item) => item.match === "missing") ??
+    openGaps[0];
+  const complianceAnswer = complianceFinding({
+    met: readiness.met,
+    gaps: readiness.gaps,
+    missingText: namedGap?.text ?? null,
+    unclear: openGaps.length > 0 && openGaps.every((item) => item.match === "unclear"),
+  });
+  const recommendationAnswer = `${RECOMMENDATION_LABEL[recommendation.label]}.`;
+  const preparationAnswer = preparationFinding(plan.done, plan.total);
+  const seenLabels = new Set<string>();
+  const openQuestions = viewFields.flatMap((field) => {
+    if (field.status !== "blank_in_source" && field.status !== "needs_human") return [];
+    if (!(field.key in FIELD_SPECS)) return [];
+    const label = FIELD_SPECS[field.key as keyof typeof FIELD_SPECS].label;
+    if (seenLabels.has(label)) return [];
+    seenLabels.add(label);
+    return [{ label, status: field.status }];
+  });
+  const because = becauseBullets({
+    compliance: complianceAnswer,
+    commercial,
+    open: openQuestions,
+    unresolved: unresolvedClause({
+      securityConflict: securityConflict !== null,
+      addendumConflicts: summary.conflicts.length,
+      closed,
+    }),
+  });
+  const approvalLine = stageApprovalLine({
+    review: latestDecision
+      ? {
+          reviewerName: latestDecision.reviewerName,
+          createdAt: latestDecision.createdAt,
+          action: latestDecision.action,
+        }
+      : null,
+    others: stageReviews,
+  });
+  const heads: Record<WorkspaceTabId, { answer: string; carried: string | null }> = {
+    interpretation: { answer: interpretationAnswer, carried: null },
+    compliance: { answer: complianceAnswer, carried: carriedFrom("Interpretation", interpretationAnswer) },
+    commercial: { answer: commercial, carried: carriedFrom("Compliance", complianceAnswer) },
+    recommendation: { answer: recommendationAnswer, carried: carriedFrom("Commercial", commercial) },
+    preparation: { answer: preparationAnswer, carried: carriedFrom("Recommendation", recommendationAnswer) },
   };
   const figures = {
     contractValueKes: opportunity.contract_value_kes,
@@ -350,7 +401,6 @@ async function TenderDetail({
       <TenderWorkspace
         tenderId={opportunity.id}
         requestedStage={requestedStage}
-        title={heading}
         buyer={displayOrganization ? sentenceCase(displayOrganization) : "Buyer not stated"}
         reference={displayReference ?? "Not stated"}
         closing={closing ? sentenceCase(closing) : "Not stated"}
@@ -379,8 +429,8 @@ async function TenderDetail({
               sources={viewSources}
               conflicts={summary.conflicts}
               pageTexts={pageTexts}
-              matters={matters}
               securityConflict={securityConflict}
+              unreadNotice={unreadNotice}
             />
             {pdfSources.length > 0 && <ExtractionStatus opportunityId={opportunity.id} sources={sourceStatuses} />}
           </>
@@ -391,6 +441,10 @@ async function TenderDetail({
               tenderId={opportunity.id}
               result={readiness}
               withdrawn={withdrawn.map((field) => field.value!.replace(/\s+/g, " ").slice(0, 90))}
+              needsHumanTexts={needsHumanTexts}
+              fileUrl={openHref}
+              mainSourceId={mainPdf?.id ?? null}
+              pageTexts={pageTexts}
             />
             {readinessError && (
               <p className="mx-5 mb-4 rounded-lg border border-blocker/40 bg-blocker/10 px-4 py-3 text-blocker">
@@ -401,6 +455,17 @@ async function TenderDetail({
         }
         commercial={
           <div className="flex flex-col gap-4 px-5 py-4">
+            <dl className="grid gap-3 sm:grid-cols-2">
+              {commercialFacts.map((fact) => (
+                <div key={fact.label}>
+                  <dt className="text-muted-foreground">{fact.label}</dt>
+                  <dd className="font-medium">
+                    {fact.value}
+                    {fact.page != null && <span className="ml-2 font-normal text-muted-foreground">p. {fact.page}</span>}
+                  </dd>
+                </div>
+              ))}
+            </dl>
             <PaymentCard risk={countyRisk} />
             <ProfitForm
               tenderId={opportunity.id}
@@ -415,7 +480,7 @@ async function TenderDetail({
               bandNote={
                 delayRows
                   ? bandDays && bandWord
-                    ? `${bandDays} days is the scenario for the ${bandWord} band. The highlighted row is that band. This is the unpaid-bills band, not a date the county will pay.`
+                    ? `${bandDays} days is the scenario for the ${bandWord} band. The highlighted row is that band.`
                     : "No county score, so no band row is highlighted."
                   : null
               }
@@ -425,7 +490,13 @@ async function TenderDetail({
             />
           </div>
         }
-        recommendation={<RecommendationCard recommendation={recommendation} decision={latestDecision} />}
+        recommendation={
+          <RecommendationCard
+            because={because}
+            approval={approvalLine}
+            reason={approvalLine ? (latestDecision?.reason ?? null) : null}
+          />
+        }
         preparation={<ActionPlan tenderId={opportunity.id} rows={planRows} editable />}
       />
 
@@ -439,22 +510,34 @@ function kesInput(value: number | null): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
+function commercialFactValue(
+  fields: readonly ViewField[],
+  key: string,
+  sourceRoles: ReadonlyMap<string, string>,
+): { value: string; page: number | null } {
+  const matches = fields.filter((field) => field.key === key);
+  const main = matches.filter((field) => field.source_id && sourceRoles.get(field.source_id) === "main");
+  const pool = main.length > 0 ? main : matches;
+  const stated = pool.find((field) => field.value && field.value.trim());
+  const page = (stated ?? pool[0])?.page_no ?? null;
+  if (!stated?.value) return { value: "not stated", page };
+  const value = key === "payment_days" ? spelledCountWithUnit(stated.value, "days") : stated.value;
+  return { value, page };
+}
+
 function PaymentCard({ risk }: { risk: CountyRiskListItem | undefined }) {
+  const hasParts = risk !== undefined && risk.partA !== null && risk.partB !== null && risk.partC !== null;
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/40 px-4 py-4">
-      <p className="text-muted-foreground">
-        Unpaid bills for this buyer&apos;s county. This is not a forecast of when the buyer will pay.
-      </p>
       {risk && risk.score !== null ? (
         <>
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="flex flex-col gap-2">
-              <span className="font-medium">{risk.county}</span>
-              <RiskBadge band={risk.band} />
-            </div>
-            <span className="font-heading text-3xl font-semibold tabular-nums">{risk.score.toFixed(1)}</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-medium">{risk.county}</span>
+            <RiskBadge band={risk.band} />
           </div>
+          <p className="font-heading text-2xl">{countyScoreLine(risk.score, RISK_LABEL[risk.band])}</p>
           <p>{countyScoreReason(risk)}</p>
+          {hasParts && <p className="text-muted-foreground">{PARTS_ROUNDED_NOTE}</p>}
           <p className="text-muted-foreground">
             Controller of Budget, as at {formatWhen(risk.asOf) ?? risk.asOf}. Confidence: {confidenceLabel(risk.confidence)}.
           </p>

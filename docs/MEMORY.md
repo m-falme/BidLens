@@ -2,7 +2,7 @@
 > Cursor: update this at the end of every step. Keep it under ~60 lines. Newest first in "Log".
 
 ## Status
-- **Current step:** ← Back is on every page, uncommitted, with the earlier review fixes and evidence-return files. On a stage it opens the previous stage (Interpretation goes to Tenders). Elsewhere it follows the visit, then the parent (tender → Tenders, evidence → the tender stage in `from`, settings/profile/trail → Overview). Tab changes push history so the browser Back button walks them.
+- **Current step:** Interpretation, compliance and commercial layout. Key facts first; compliance counts add up; county score is out of 100. Not committed.
 - **Deployed URL:** —
 - **Repo:** https://github.com/m-falme/BidLens, branch `main`
 - **Gate:** Thu 12 Nov 2026 · assessment 14:00–15:30 EAT · cut 16:00
@@ -15,6 +15,9 @@
 - [ ] 5. Deployed public link with seeded demo data
 
 ## Decisions
+- 2026-11-13: "Found N facts" excludes blank-in-source. Those are "Not filled in by the buyer". Compliance counts are met + gaps + to prepare; could-disqualify sits inside the gaps. A self-declared match reads "Claimed, not verified". The county score is out of 100 (Makueni is 2.6 out of 100, low payment risk). The payment-date disclaimer is the Commercial stage sentence only.
+- 2026-11-13: Stage hashes are `#interpretation`, `#compliance`, `#commercial`, `#recommendation`, and `#preparation`. Old hashes (`#can_bid`, `#can_comply`, `#should_bid`, `#proceed`) still open the stage, then the address is rewritten. The pill row is gone. Back and Next change stage only. "Approved by" is hidden when a later review exists. An override that is still the latest says "Overridden by".
+- 2026-11-13: Bid preparation progress is ticks only (`0 of N` until someone marks Done). A document still marked Missing cannot be ticked. Get holds missing or expired documents plus bid-bond delivery steps. Ask the buyer is unchanged. Prepare is forms and the response, not the compliance list. Key dates are closing date and time, bid validity, and bond validity.
 - 2026-11-13: ← Back lives in the top bar. A tender stage links to the previous stage. Other pages call history back when the visit trail has a previous in-app page, and otherwise use the parent. Stage changes use `router.push`, so the browser Back button returns to the stage you left.
 - 2026-11-13: A past closing date cannot return Proceed (Consider declining, "Closing date has passed"), and only after the earlier rules. A bid-security conflict or an addendum conflict returns Seek clarification. The closing date is the addendum line when one exists, otherwise the main document (`preferredClosing`). A requirement sentence is not a company record. Bid preparation is done only when nothing is missing. Approve stays off when there is no source-confirmed fact or no mandatory requirement.
 - 2026-11-13: Evidence links from a tender carry `from` (encoded `/tenders/{id}?stage={stage}`) and, for a company document, `#doc-{id}`. `/evidence` shows "Back to {title}, {stage}" only when `from` is a `/tenders/{uuid}` path. Other values are ignored. The tender page opens `?stage=` (tab id, old hash, or stage name). A tab click updates that query. Stored stages stay `can_bid`, `can_comply`, `should_bid`.
@@ -62,10 +65,10 @@
 ## Next
 - Commit the review fixes and the evidence-return step separately, then deploy the public link. Supabase CLI needs `--remote`. Vercel env must be the project URL with no path.
 - Human correction of an extracted field (keep `original_value`) is still not built. Quote check already runs in extraction.
-- Nyamira stays. It has Interpretation, Compliance and Commercial reviews (empty notes, Bid manager, 13 Nov) and an approved Proceed to preparation decision, so it was not deleted. The scan, two pages and the failed extraction run are still there. No fields.
+- Nyamira `4a6d7a39-7a24-45ba-b5dc-bf855f5eac67` was deleted with its reviews, decision, and storage file (`npx tsx scripts/remove-unread-tender.mts`). No other tender had zero source-confirmed facts and no closing date.
 
 ## Known issues / open questions
-- Live data from the 13 Nov review: Makueni has Interpretation reviewed (empty note), Compliance reviewed (note about the company list), an approved Resolve blockers decision, and 1 of 20 plan items done. Nairobi has no reviews or decisions. Nyamira `4a6d7a39-7a24-45ba-b5dc-bf855f5eac67` now has three stage reviews and one bid decision, so the advert was left in place. Both pages are scans; the extraction run failed before any fields.
+- Live data from the 13 Nov review: Makueni has Interpretation reviewed (empty note), Compliance reviewed (note about the company list), an approved Resolve blockers decision, and 1 of 20 plan items done. Nairobi has no reviews or decisions. Nyamira was removed on 13 Nov. The saved Makueni tick may no longer match a plan row, because Get / Prepare / Key dates use different item keys.
 - A bad tender id calls `notFound()` and shows "Tender not found" inside the shell, with a link back to Tenders. The status can stay HTTP 200 because that call sits under the page Suspense (Cache Components). A missing id on the extract route returns 404.
 - Approve and Override share one saving state, so both labels change together. The stage progress row still scrolls sideways on a narrow desktop.
 - Free-tier Gemini: `gemini-3.6-flash` is 20 requests/day (exhausted while choosing a model). Live calls use `gemini-3.5-flash-lite`. A demand spike retries once.
@@ -81,6 +84,9 @@
 - npm held back esbuild's postinstall (allowScripts); tsx works regardless.
 
 ## Log
+- 2026-11-13 07:20 — Interpretation key facts, compliance counts and one-line rows, commercial facts and the county score out of 100. 217 tests and the build passed. Checked Makueni and Nairobi HTML. Not committed.
+- 2026-11-13 07:00 — One stage bar, answer-first sentences, recommendation because bullets. 216 tests and the build passed. Not committed.
+- 2026-11-13 06:40 — Deleted Nyamira (3 reviews, 1 decision, 1 file). No other empty tender. Bid preparation regrouped. 213 tests and the build passed.
 - 2026-11-13 06:20 — ← Back on every page and stage. Not committed.
 - 2026-11-13 06:00 — Review fixes, not committed. Closed tenders, conflicts, one closing date, empty-tender guard, company-record names, progress label, open-tab stage heading, not-found back link, copy. 205 tests and the build passed.
 - 2026-11-13 05:10 — Evidence return. Nairobi compliance document link opens the library with a back link to that tender and Compliance; Enter on the link returns to `?stage=compliance`. The commercial ＋ Evidence link carries `stage=commercial`. An external `from` shows no back link. Nyamira not deleted (3 reviews, 1 decision). Lint, typecheck, 193 tests and the build passed.

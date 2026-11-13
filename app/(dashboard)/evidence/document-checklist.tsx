@@ -210,7 +210,7 @@ function DocumentRow({
             {document.uses.map((use, index) => (
               <li key={`${use.tenderId}-${index}`} className="break-words">
                 <Link
-                  href={`/tenders/${use.tenderId}#can_comply`}
+                  href={`/tenders/${use.tenderId}#compliance`}
                   className="font-medium text-brand underline-offset-4 hover:underline"
                 >
                   {sentenceCase(use.tenderTitle)}

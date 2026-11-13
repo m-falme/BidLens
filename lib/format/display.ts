@@ -45,6 +45,14 @@ function formatPart(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
+/** Caps from the score: ageing ≤50, size ≤30, trend ≤20. The total is still out of 100. */
+const PART_OF = { ageing: 50, size: 30, trend: 20 } as const;
+
+/** "76.5 out of 100, severe payment risk". The scale is 0–100, higher means more unpaid bills. */
+export function countyScoreLine(score: number, bandLabel: string): string {
+  return `${score.toFixed(1)} out of 100, ${bandLabel.toLowerCase()} payment risk`;
+}
+
 /** One line under the county band and score. Parts explain the score. A blank score uses the stored note. */
 export function countyScoreReason(input: {
   score: number | null;
@@ -54,7 +62,11 @@ export function countyScoreReason(input: {
   partC: number | null;
 }): string {
   if (input.score !== null && input.partA !== null && input.partB !== null && input.partC !== null) {
-    return `Ageing ${formatPart(input.partA)}, size ${formatPart(input.partB)}, trend ${formatPart(input.partC)}.`;
+    return [
+      `Bills older than two years: ${formatPart(input.partA)} of ${PART_OF.ageing}`,
+      `Unpaid bills against the budget: ${formatPart(input.partB)} of ${PART_OF.size}`,
+      `Change since last year: ${formatPart(input.partC)} of ${PART_OF.trend}`,
+    ].join(". ") + ".";
   }
   const note = input.reason?.replace(/\s+/g, " ").trim();
   if (note) return note;

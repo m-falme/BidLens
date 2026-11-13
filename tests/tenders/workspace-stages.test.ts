@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   approveToast,
+  decisionHeading,
+  hashForTab,
+  isLegacyHash,
   preparationToast,
   reviewPill,
   stageHeading,
@@ -50,12 +53,23 @@ describe("workspace stages", () => {
     expect(reviewPill({ ...approval, decision: true })).toBe("IN REVIEW · STAGE 5 OF 5");
   });
 
-  it("keeps the old step hashes", () => {
+  it("uses the stage id as the hash and still accepts the old step hashes", () => {
+    expect(hashForTab("interpretation")).toBe("interpretation");
+    expect(hashForTab("compliance")).toBe("compliance");
+    expect(hashForTab("commercial")).toBe("commercial");
+    expect(hashForTab("recommendation")).toBe("recommendation");
+    expect(hashForTab("preparation")).toBe("preparation");
+    expect(tabFromHash("#interpretation")).toBe("interpretation");
+    expect(tabFromHash("#compliance")).toBe("compliance");
+    expect(tabFromHash("#preparation")).toBe("preparation");
     expect(tabFromHash("#can_bid")).toBe("interpretation");
     expect(tabFromHash("can_comply")).toBe("compliance");
     expect(tabFromHash("#should_bid")).toBe("commercial");
     expect(tabFromHash("#proceed")).toBe("preparation");
     expect(tabFromHash("#nope")).toBeNull();
+    expect(isLegacyHash("#can_bid")).toBe(true);
+    expect(isLegacyHash("proceed")).toBe(true);
+    expect(isLegacyHash("#compliance")).toBe(false);
   });
 
   it("reads ?stage= as a tab id, the old hash, or the stage name", () => {
@@ -73,12 +87,16 @@ describe("workspace stages", () => {
     expect(approveToast("commercial")).toBe("Commercial approved. Next: Recommendation.");
     expect(preparationToast(0, 0)).toBe("Bid preparation reviewed");
     expect(preparationToast(4, 4)).toBe("Bid preparation reviewed");
-    expect(preparationToast(19, 20)).toBe("19 of 20 · 1 missing");
+    expect(preparationToast(19, 20)).toBe("19 of 20");
+    expect(preparationToast(0, 8)).toBe("0 of 8");
   });
 
-  it("names the open tab, and the decision once one is recorded", () => {
-    expect(stageHeading("commercial", null)).toBe("Stage 3 of 5 · Commercial");
-    expect(stageHeading("interpretation", null)).toBe("Stage 1 of 5 · Interpretation");
-    expect(stageHeading("preparation", "Proceed to preparation")).toBe("Decided: Proceed to preparation");
+  it("names the open tab, and adds the decision once one is recorded", () => {
+    expect(stageHeading("commercial")).toBe("Stage 3 of 5 · Commercial");
+    expect(stageHeading("interpretation")).toBe("Stage 1 of 5 · Interpretation");
+    expect(stageHeading("compliance")).toBe("Stage 2 of 5 · Compliance");
+    expect(stageHeading("preparation")).toBe("Stage 5 of 5 · Bid preparation");
+    expect(decisionHeading(null)).toBeNull();
+    expect(decisionHeading("Proceed to preparation")).toBe("Decided: Proceed to preparation");
   });
 });

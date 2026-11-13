@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import { COMPANY_PAPERS, holdingLabel } from "@/lib/company/papers";
-import { readinessLabel, isWithdrawnByAddendum, matchRequirements, type ProfileCapability, type RequirementInput } from "@/lib/readiness/match";
+import {
+  complianceCountLine,
+  complianceDisplayOrder,
+  readinessLabel,
+  isWithdrawnByAddendum,
+  matchRequirements,
+  type ProfileCapability,
+  type RequirementInput,
+} from "@/lib/readiness/match";
 import { zanariCapabilities } from "@/supabase/seed/zanari-profile";
 
 const services: ProfileCapability[] = [
@@ -153,7 +161,7 @@ const profile: ProfileCapability[] = zanariCapabilities.map((capability, index) 
 }));
 
 describe("company documents", () => {
-  it("labels a held registration paper Met (self-declared) and does not treat Don't have as met", () => {
+  it("labels a held registration paper Claimed, not verified and does not treat Don't have as met", () => {
     const result = matchRequirements(
       [
         req("2. Copy of valid Tax Compliance Certificate"),
@@ -163,7 +171,7 @@ describe("company documents", () => {
       "2026-11-12",
     );
     expect(result.items[0]).toMatchObject({ match: "met", capabilityId: "tax-compliance", selfDeclared: true });
-    expect(readinessLabel(result.items[0])).toBe("Met (self-declared)");
+    expect(readinessLabel(result.items[0])).toBe("Claimed, not verified");
     expect(result.items[1]).toMatchObject({ match: "missing", capabilityId: null, disqualifying: true });
     expect(result.items[1].rationale).toMatch(/Don't have/);
     expect(holdingLabel("have", true)).toBe("Have (self-declared)");
@@ -289,6 +297,13 @@ describe("Nairobi and Makueni against the seeded checklist", () => {
     expect(result.gaps).toBe(13);
     expect(result.couldDisqualify).toBe(7);
     expect(result.toPrepare).toBe(10);
+    expect(result.met + result.gaps + result.toPrepare).toBe(result.items.length);
+    expect(complianceCountLine(result)).toBe(
+      "26 requirements: 3 met, 13 gaps (7 could disqualify), 10 to prepare",
+    );
+    const ordered = complianceDisplayOrder(result.items).map((item) => item.match);
+    expect(ordered.slice(0, result.gaps).every((match) => match === "missing" || match === "unclear")).toBe(true);
+    expect(ordered.slice(result.gaps).every((match) => match === "met" || match === "to_prepare")).toBe(true);
     expect(result.items.filter((item) => item.match === "met").every((item) => item.selfDeclared)).toBe(true);
     expect(result.items[2].rationale).not.toMatch(/director ID/);
   });

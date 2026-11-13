@@ -81,11 +81,37 @@ const PREPARE =
 
 /** Badge text. A self-declared match is never shown as a checked document. */
 export function readinessLabel(item: Pick<MatchedRequirement, "match" | "selfDeclared">): string {
-  if (item.match === "met" && item.selfDeclared) return "Met (self-declared)";
+  if (item.match === "met" && item.selfDeclared) return "Claimed, not verified";
   if (item.match === "met") return "Met";
   if (item.match === "to_prepare") return "To prepare";
   if (item.match === "missing") return "Missing";
   return "Needs human";
+}
+
+/**
+ * Gaps first, then everything else. Order inside each group stays as extracted.
+ * A could-disqualify row is a gap, so it sorts with the gaps.
+ */
+export function complianceDisplayOrder<T extends { match: ReadinessMatch }>(items: readonly T[]): T[] {
+  const gap = (match: ReadinessMatch) => (match === "missing" || match === "unclear" ? 0 : 1);
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => gap(a.item.match) - gap(b.item.match) || a.index - b.index)
+    .map((row) => row.item);
+}
+
+/**
+ * met + gaps + to prepare = the requirements on the table.
+ * Could-disqualify is named inside the gap count, not added again.
+ */
+export function complianceCountLine(
+  result: Pick<ReadinessResult, "met" | "gaps" | "toPrepare" | "couldDisqualify">,
+): string {
+  const total = result.met + result.gaps + result.toPrepare;
+  const gaps = `${result.gaps} ${result.gaps === 1 ? "gap" : "gaps"}`;
+  const qualify = result.couldDisqualify > 0 ? ` (${result.couldDisqualify} could disqualify)` : "";
+  const noun = total === 1 ? "requirement" : "requirements";
+  return `${total} ${noun}: ${result.met} met, ${gaps}${qualify}, ${result.toPrepare} to prepare`;
 }
 
 /**

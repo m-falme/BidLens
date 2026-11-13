@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   PROFIT_EMPTY,
   delayTable,
+  profitIdleMessage,
   formatKes,
   formatMarginPct,
   parseKesInput,
@@ -59,6 +60,13 @@ describe("profit view", () => {
     expect(result?.onTimeKes).toBe(-500_000);
     expect(result?.lateKes).toBeNull();
     expect(result?.lateNote).toMatch(/not below the contract value/);
+  });
+
+  it("keeps the delivery-cost warning off the screen while an input is blank", () => {
+    const warning = "Delivery cost is not below the contract value, so profit after a delay is not calculated.";
+    expect(profitIdleMessage({ contractValue: "", deliveryCost: "", lateNote: warning })).toBe(PROFIT_EMPTY);
+    expect(profitIdleMessage({ contractValue: "8000000", deliveryCost: "  ", lateNote: warning })).toBe(PROFIT_EMPTY);
+    expect(profitIdleMessage({ contractValue: "8000000", deliveryCost: "9000000", lateNote: warning })).toBe(warning);
   });
 });
 

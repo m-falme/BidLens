@@ -19,6 +19,16 @@ export const TYPICAL_DELAY_DAYS = {
 
 export const PROFIT_EMPTY = "Add contract value and cost to see profit.";
 
+/** Under the inputs. A blank box never shows the margin warning from a previous pair of figures. */
+export function profitIdleMessage(input: {
+  contractValue: string;
+  deliveryCost: string;
+  lateNote: string | null;
+}): string {
+  if (input.contractValue.trim() === "" || input.deliveryCost.trim() === "") return PROFIT_EMPTY;
+  return input.lateNote ?? PROFIT_EMPTY;
+}
+
 const BAND_WORD: Record<Exclude<RiskBand, "unknown">, string> = {
   low: "Low",
   moderate: "Moderate",

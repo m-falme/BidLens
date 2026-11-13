@@ -160,7 +160,7 @@ export function nextActions(tenders: readonly OverviewTender[]): { items: NextAc
         id: `${tender.id}:conflict`,
         title: "Resolve an addendum conflict",
         detail: `${name} · ${count} conflict${count === 1 ? "" : "s"}`,
-        href: `/tenders/${tender.id}#can_bid`,
+        href: `/tenders/${tender.id}#interpretation`,
         tone: "warning",
       });
     }
@@ -170,7 +170,7 @@ export function nextActions(tenders: readonly OverviewTender[]): { items: NextAc
         id: `${tender.id}:human`,
         title: "Check facts that need a person",
         detail: `${name} · ${count} fact${count === 1 ? "" : "s"}`,
-        href: `/tenders/${tender.id}#can_bid`,
+        href: `/tenders/${tender.id}#interpretation`,
         tone: "warning",
       });
     }
@@ -180,7 +180,7 @@ export function nextActions(tenders: readonly OverviewTender[]): { items: NextAc
         id: `${tender.id}:docs`,
         title: "Missing mandatory documents",
         detail: `${name} · ${count} document${count === 1 ? "" : "s"}`,
-        href: `/tenders/${tender.id}#can_comply`,
+        href: `/tenders/${tender.id}#compliance`,
         tone: "warning",
       });
     }
@@ -189,7 +189,7 @@ export function nextActions(tenders: readonly OverviewTender[]): { items: NextAc
         id: `${tender.id}:decision`,
         title: "Record a bid decision",
         detail: name,
-        href: `/tenders/${tender.id}#should_bid`,
+        href: `/tenders/${tender.id}#commercial`,
         tone: "neutral",
       });
     }

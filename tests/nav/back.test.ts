@@ -19,12 +19,12 @@ describe("stage back", () => {
 
   it("steps to the previous stage and keeps that stage in the address", () => {
     expect(stageBackHref(`/tenders/${TENDER}`, "compliance")).toBe(
-      `/tenders/${TENDER}?stage=interpretation#can_bid`,
+      `/tenders/${TENDER}?stage=interpretation#interpretation`,
     );
-    expect(stageBackHref(`/tenders/${TENDER}`, "commercial")).toBe(`/tenders/${TENDER}?stage=compliance#can_comply`);
-    expect(stageBackHref(`/tenders/${TENDER}`, "should_bid")).toBe(`/tenders/${TENDER}?stage=compliance#can_comply`);
+    expect(stageBackHref(`/tenders/${TENDER}`, "commercial")).toBe(`/tenders/${TENDER}?stage=compliance#compliance`);
+    expect(stageBackHref(`/tenders/${TENDER}`, "should_bid")).toBe(`/tenders/${TENDER}?stage=compliance#compliance`);
     expect(stageBackHref(`/tenders/${TENDER}`, "recommendation")).toBe(
-      `/tenders/${TENDER}?stage=commercial#should_bid`,
+      `/tenders/${TENDER}?stage=commercial#commercial`,
     );
     expect(stageBackHref(`/tenders/${TENDER}`, "Bid preparation")).toBe(
       `/tenders/${TENDER}?stage=recommendation#recommendation`,
@@ -40,7 +40,7 @@ describe("stage back", () => {
         previous: "/evidence",
         here: `/tenders/${TENDER}?stage=commercial`,
       }),
-    ).toEqual({ kind: "href", href: `/tenders/${TENDER}?stage=compliance#can_comply` });
+    ).toEqual({ kind: "href", href: `/tenders/${TENDER}?stage=compliance#compliance` });
   });
 });
 
@@ -52,7 +52,7 @@ describe("parent back", () => {
     expect(parentBackHref("/counties", null)).toBe("/");
     expect(parentBackHref("/tenders", null)).toBe("/");
     expect(parentBackHref("/tenders/new", null)).toBe("/tenders");
-    expect(parentBackHref(`/tenders/${TENDER}/plan`, null)).toBe(`/tenders/${TENDER}?stage=preparation#proceed`);
+    expect(parentBackHref(`/tenders/${TENDER}/plan`, null)).toBe(`/tenders/${TENDER}?stage=preparation#preparation`);
     expect(parentBackHref("/tenders/not-a-uuid", null)).toBe("/tenders");
     expect(parentBackHref("/", null)).toBeNull();
   });

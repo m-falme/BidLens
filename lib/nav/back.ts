@@ -38,7 +38,7 @@ export function stageBackHref(pathname: string, stageParam: string | null): stri
 export function parentBackHref(pathname: string, fromParam: string | null): string | null {
   if (pathname === "/") return null;
   const plan = PLAN_PAGE.exec(pathname);
-  if (plan) return `/tenders/${plan[1]}?stage=preparation#proceed`;
+  if (plan) return `/tenders/${plan[1]}?stage=preparation#${hashForTab("preparation")}`;
   if (pathname === "/tenders/new" || pathname === "/leads" || pathname === "/proposals") return "/tenders";
   if (pathname === "/tenders") return "/";
   if (pathname.startsWith("/tenders/")) return "/tenders";

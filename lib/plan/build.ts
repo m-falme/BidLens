@@ -1,6 +1,6 @@
 import type { FieldStatus } from "@/lib/db/vocab";
 import { closingLabel } from "@/lib/format/display";
-import { daysUntilClosing, daysUntilDeadline, parseClosingText, preferredClosing } from "@/lib/recommendation/deadline";
+import { daysUntilClosing, preferredClosing } from "@/lib/recommendation/deadline";
 import { isCompanyRecordName } from "@/lib/readiness/match";
 import { FIELD_SPECS, SCALAR_FIELD_KEYS, type TenderFieldKey } from "@/lib/tenders/field-catalog";
 
@@ -39,6 +39,8 @@ export interface ActionPlanItem {
   pageNo: number | null;
   /** Set on questions, so they can be copied without the surrounding label. */
   question: string | null;
+  /** A document the company still does not hold. A tick on it does not count as done. */
+  missing: boolean;
 }
 
 export interface ActionPlan {
@@ -78,10 +80,10 @@ const QUESTION_SUBJECT: Record<string, string> = {
 const EXPERIENCE_LINE =
   /similar (?:works|work|contracts|contract|projects|project)|years? of experience|reference sites?/i;
 
-const CLARIFICATION_DEADLINE =
-  /clarification deadline|deadline for clarifications?|last (?:date|day) (?:for|to) (?:seek |submit )?(?:clarifications?|queries|enquiries)|clarifications? (?:must|shall|to) be (?:sought|submitted|received|sent) (?:by|before|on)/i;
+const BOND = /\b(?:bid bond|tender security|bid security)\b/i;
 
-const SITE_VISIT = /site visit|pre-bid conference|pre-bid meeting|pre-bid site/i;
+const BOND_VALIDITY =
+  /(?:must\s+)?remain\s+valid\s+for\s+\d+\s+days(?:\s+after\s+[^.]{0,80})?|valid\s+for\s+\d+\s+days(?:\s+(?:after|beyond|from)\s+[^.]{0,80})?|validity(?:\s+period)?\s+of\s+\d+\s+days(?:\s+(?:after|beyond|from)\s+[^.]{0,80})?/i;
 
 interface Draft {
   section: PlanSection;
@@ -91,6 +93,7 @@ interface Draft {
   pageNo: number | null;
   question: string | null;
   identity: string;
+  missing: boolean;
 }
 
 /** Missing or expired mandatory documents. Experience lines are left out. */
@@ -124,12 +127,13 @@ export function clarificationQuestion(input: {
     : `Please confirm the ${subject} (page ${input.pageNo} needs a person to check).`;
 }
 
+function counted(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
 export function planFinding(plan: ActionPlan): string {
   if (plan.items.length === 0) return "Nothing to prepare from the extracted facts.";
-  const documents = plan.documents.length;
-  const questions = plan.questions.length;
-  const sections = plan.outline.length;
-  return `${documents} document${documents === 1 ? "" : "s"} to get, ${questions} question${questions === 1 ? "" : "s"} for the buyer, and ${sections} section${sections === 1 ? "" : "s"} to include.`;
+  return `${counted(plan.documents.length, "document", "documents")} to get, ${counted(plan.questions.length, "question", "questions")} for the buyer, and ${counted(plan.outline.length, "item", "items")} to prepare.`;
 }
 
 export function mergeSaved(plan: ActionPlan, saved: readonly SavedAction[]): PlanRow[] {
@@ -140,27 +144,30 @@ export function mergeSaved(plan: ActionPlan, saved: readonly SavedAction[]): Pla
       ...item,
       ownerName: row?.ownerName?.trim() ?? "",
       dueOn: row?.dueOn ?? "",
-      done: row?.done === true,
+      done: row?.done === true && !item.missing,
     };
   });
 }
 
-export function planProgress(rows: readonly { done: boolean }[]): {
+/**
+ * Done is only a tick the team saved. It starts at 0.
+ * A Missing document stays in the total and never counts as done.
+ */
+export function planProgress(rows: readonly { done: boolean; missing?: boolean }[]): {
   done: number;
   total: number;
   missing: number;
   label: string;
 } {
   const total = rows.length;
-  const done = rows.filter((row) => row.done).length;
-  const missing = total - done;
-  const label = missing === 0 ? `${done} of ${total} done` : `${done} of ${total} · ${missing} missing`;
-  return { done, total, missing, label };
+  const missing = rows.filter((row) => row.missing === true).length;
+  const done = rows.filter((row) => row.done && row.missing !== true).length;
+  return { done, total, missing, label: `${done} of ${total}` };
 }
 
-/** Bid preparation is done only when nothing is still missing. An empty plan has nothing missing. */
-export function preparationIsDone(progress: { missing: number }): boolean {
-  return progress.missing === 0;
+/** Every item is ticked. A Missing document cannot be ticked, so it keeps this false. An empty plan is done. */
+export function preparationIsDone(progress: { done: number; total: number }): boolean {
+  return progress.done === progress.total;
 }
 
 function labelFor(field: PlanField): string {
@@ -192,6 +199,7 @@ function finish(drafts: readonly Draft[]): ActionPlanItem[] {
       detail: draft.detail,
       pageNo: draft.pageNo,
       question: draft.question,
+      missing: draft.missing,
     };
   });
 }
@@ -214,24 +222,6 @@ function unresolvedScalar(fields: readonly PlanField[], key: string): PlanField 
   const latest = addendum.length > 0 ? addendum : group;
   if (latest.some((field) => field.value && !open(field))) return null;
   return latest.find(open) ?? null;
-}
-
-function documentDrafts(requirements: readonly PlanRequirement[]): Draft[] {
-  return requirements.filter(isDocumentToGet).map((requirement) => {
-    const text = line(requirement.text);
-    const state = requirement.expired ? "Expired" : "Missing";
-    const named = requirement.documentName?.replace(/\s+/g, " ").trim() ?? "";
-    const record = named && isCompanyRecordName(named) ? named : "";
-    return {
-      section: "documents",
-      kind: "document",
-      title: text,
-      detail: record ? `${state}. Company record: ${record}.` : `${state}.`,
-      pageNo: requirement.pageNo,
-      question: null,
-      identity: `${requirement.pageNo ?? "x"}:${slug(text)}`,
-    };
-  });
 }
 
 function questionDrafts(fields: readonly PlanField[]): Draft[] {
@@ -259,51 +249,113 @@ function questionDrafts(fields: readonly PlanField[]): Draft[] {
       pageNo: field.pageNo,
       question,
       identity: `${field.key}:${field.role}:${field.ordinal}`,
+      missing: false,
     };
   });
 }
 
-function outlineDrafts(requirements: readonly PlanRequirement[], fields: readonly PlanField[]): Draft[] {
+/** Sentences that say how the bid bond is handed in. The "get the bond" sentence stays a document. */
+function bondDeliverySteps(text: string): string[] {
+  if (!BOND.test(text)) return [];
+  const chunks = line(text)
+    .split(/\s+(?=Note:\s|Additionally,\s)/)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+  if (chunks.length < 2) return [];
+  return chunks.slice(1).filter((chunk) => /upload|deliver|tender box|separate envelope|ifmis/i.test(chunk));
+}
+
+function bondValidityPhrase(text: string): string | null {
+  const match = text.match(BOND_VALIDITY);
+  return match ? line(match[0]) : null;
+}
+
+function documentDrafts(requirements: readonly PlanRequirement[]): Draft[] {
+  const documents = requirements.filter(isDocumentToGet).map((requirement) => {
+    const text = line(requirement.text);
+    const state = requirement.expired ? "Expired" : "Missing";
+    const named = requirement.documentName?.replace(/\s+/g, " ").trim() ?? "";
+    const record = named && isCompanyRecordName(named) ? named : "";
+    return {
+      section: "documents" as const,
+      kind: "document" as const,
+      title: text,
+      detail: record ? `${state}. Company record: ${record}.` : `${state}.`,
+      pageNo: requirement.pageNo,
+      question: null,
+      identity: `${requirement.pageNo ?? "x"}:${slug(text)}`,
+      missing: state === "Missing",
+    };
+  });
+  const steps = requirements.flatMap((requirement) =>
+    bondDeliverySteps(requirement.text).map((step) => ({
+      section: "documents" as const,
+      kind: "document" as const,
+      title: step,
+      detail: "Bid bond delivery.",
+      pageNo: requirement.pageNo,
+      question: null,
+      identity: `bond-step:${requirement.pageNo ?? "x"}:${slug(step)}`,
+      missing: false,
+    })),
+  );
+  return [...documents, ...steps];
+}
+
+/** Forms to fill, then the response sections. The compliance checklist is not repeated here. */
+function prepareDrafts(requirements: readonly PlanRequirement[], fields: readonly PlanField[]): Draft[] {
+  const forms: Draft[] = requirements
+    .filter((requirement) => requirement.match === "to_prepare")
+    .map((requirement) => {
+      const text = line(requirement.text);
+      return {
+        section: "outline",
+        kind: "outline",
+        title: text,
+        detail: "Form",
+        pageNo: requirement.pageNo,
+        question: null,
+        identity: `form:${slug(text)}`,
+        missing: false,
+      };
+    });
   const criteria = pool(fields, "evaluation_criterion")
     .filter((field) => field.value)
     .slice()
     .sort((a, b) => a.ordinal - b.ordinal || (a.pageNo ?? 0) - (b.pageNo ?? 0));
-  const fromCriteria: Draft[] = criteria.map((field) => {
+  const response: Draft[] = criteria.map((field) => {
     const text = line(field.value ?? "");
     return {
       section: "outline",
       kind: "outline",
       title: text,
-      detail: "Evaluation criterion",
+      detail: "Response",
       pageNo: field.pageNo,
       question: null,
       identity: `evaluation:${field.role}:${field.ordinal}:${slug(text)}`,
+      missing: false,
     };
   });
-  const fromRequirements: Draft[] = requirements.map((requirement) => {
-    const text = line(requirement.text);
-    return {
-      section: "outline",
-      kind: "outline",
-      title: text,
-      detail: "Mandatory requirement",
-      pageNo: requirement.pageNo,
-      question: null,
-      identity: `requirement:${slug(text)}`,
-    };
-  });
-  return [...fromCriteria, ...fromRequirements];
+  return [...forms, ...response];
 }
 
-function eventField(fields: readonly PlanField[], pattern: RegExp): PlanField | null {
-  const hits = fields.filter(
-    (field) =>
-      field.key !== "closing_datetime" &&
-      field.value !== null &&
-      pattern.test(field.value) &&
-      parseClosingText(field.value) !== null,
-  );
-  return hits.find((field) => field.role === "addendum") ?? hits.find((field) => field.role === "main") ?? hits[0] ?? null;
+function statedScalar(fields: readonly PlanField[], key: string): PlanField | null {
+  const group = fields.filter((field) => field.key === key && field.value?.trim());
+  return group.find((field) => field.role === "addendum") ?? group.find((field) => field.role === "main") ?? null;
+}
+
+function bondValidity(requirements: readonly PlanRequirement[], fields: readonly PlanField[]): { phrase: string; pageNo: number | null } | null {
+  for (const requirement of requirements) {
+    if (!BOND.test(requirement.text)) continue;
+    const phrase = bondValidityPhrase(requirement.text);
+    if (phrase) return { phrase, pageNo: requirement.pageNo };
+  }
+  for (const role of ["addendum", "main"] as const) {
+    const field = fields.find((item) => item.key === "bid_security" && item.role === role && item.value?.trim());
+    const phrase = field?.value ? bondValidityPhrase(field.value) : null;
+    if (field && phrase) return { phrase, pageNo: field.pageNo };
+  }
+  return null;
 }
 
 function datedLine(value: string, days: number | null): string {
@@ -313,7 +365,7 @@ function datedLine(value: string, days: number | null): string {
 }
 
 function dateDraft(
-  identity: "submission" | "clarification" | "site-visit",
+  identity: "closing" | "bid-validity" | "bond-validity",
   title: string,
   value: string | null,
   pageNo: number | null,
@@ -323,45 +375,30 @@ function dateDraft(
     section: "dates",
     kind: "date",
     title,
-    detail: value ? datedLine(value, days) : "Not stated in the extracted facts.",
+    detail: value ? (days === null ? (/[.!?]$/.test(line(value)) ? line(value) : `${line(value)}.`) : datedLine(value, days)) : "Not stated in the extracted facts.",
     pageNo,
     question: null,
     identity,
+    missing: false,
   };
 }
 
-function dateDrafts(fields: readonly PlanField[], deadlineAt: string | null, asOf: Date): Draft[] {
+function dateDrafts(
+  requirements: readonly PlanRequirement[],
+  fields: readonly PlanField[],
+  deadlineAt: string | null,
+  asOf: Date,
+): Draft[] {
   const closing = preferredClosing(fields);
   const written = closingLabel(closing?.value ?? null, deadlineAt);
   const days = daysUntilClosing({ closingText: closing?.value ?? null, deadlineAt, asOf });
-  const drafts = [
-    dateDraft("submission", "Submission deadline", written, closing?.pageNo ?? null, written ? days : null),
+  const validity = statedScalar(fields, "tender_validity");
+  const bond = bondValidity(requirements, fields);
+  return [
+    dateDraft("closing", "Closing date and time", written, closing?.pageNo ?? null, written ? days : null),
+    dateDraft("bid-validity", "Bid validity", validity?.value ?? null, validity?.pageNo ?? null, null),
+    dateDraft("bond-validity", "Bond validity", bond?.phrase ?? null, bond?.pageNo ?? null, null),
   ];
-  const clarification = eventField(fields, CLARIFICATION_DEADLINE);
-  if (clarification?.value) {
-    drafts.push(
-      dateDraft(
-        "clarification",
-        "Clarification deadline",
-        clarification.value,
-        clarification.pageNo,
-        daysUntilDeadline({ deadlineAt: null, closingText: clarification.value, asOf }),
-      ),
-    );
-  }
-  const visit = eventField(fields, SITE_VISIT);
-  if (visit?.value) {
-    drafts.push(
-      dateDraft(
-        "site-visit",
-        "Site visit",
-        visit.value,
-        visit.pageNo,
-        daysUntilDeadline({ deadlineAt: null, closingText: visit.value, asOf }),
-      ),
-    );
-  }
-  return drafts;
 }
 
 export function buildActionPlan(input: {
@@ -372,8 +409,8 @@ export function buildActionPlan(input: {
 }): ActionPlan {
   const documents = finish(documentDrafts(input.requirements));
   const questions = finish(questionDrafts(input.fields));
-  const outline = finish(outlineDrafts(input.requirements, input.fields));
-  const dates = finish(dateDrafts(input.fields, input.deadlineAt, input.asOf));
+  const outline = finish(prepareDrafts(input.requirements, input.fields));
+  const dates = finish(dateDrafts(input.requirements, input.fields, input.deadlineAt, input.asOf));
   return {
     documents,
     questions,

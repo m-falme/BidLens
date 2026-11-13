@@ -17,15 +17,19 @@ import { evidenceLibraryHref } from "@/lib/tenders/evidence-return";
 import {
   WORKSPACE_TABS,
   approveToast,
+  decisionHeading,
   hashForTab,
+  isLegacyHash,
   nextTab,
   preparationToast,
+  previousTab,
   reviewStageForTab,
   reviewStageNumber,
   stageHeading,
   stageMark,
   tabFromHash,
   tabFromStage,
+  tabLabel,
   type WorkspaceApproval,
   type WorkspaceTabId,
 } from "@/lib/tenders/workspace-stages";
@@ -58,7 +62,6 @@ function hashSnapshot() {
 export function TenderWorkspace({
   tenderId,
   requestedStage,
-  title,
   buyer,
   reference,
   closing,
@@ -80,7 +83,6 @@ export function TenderWorkspace({
   tenderId: string;
   /** `?stage=` from the tender URL. Opens that stage when it names one. */
   requestedStage?: string | null;
-  title: string;
   buyer: string;
   reference: string;
   closing: string;
@@ -91,7 +93,7 @@ export function TenderWorkspace({
   needsHumanReview: boolean;
   addendumHref: string;
   approval: WorkspaceApproval;
-  heads: Record<WorkspaceTabId, { title: string; summary: string }>;
+  heads: Record<WorkspaceTabId, { answer: string; carried: string | null }>;
   recommendedLabel: RecommendationLabel;
   planDone: number;
   planTotal: number;
@@ -118,6 +120,7 @@ export function TenderWorkspace({
   const [toast, setToast] = useState<string | null>(null);
   const [finalLabel, setFinalLabel] = useState("");
   const [reason, setReason] = useState("");
+  const [changeOpen, setChangeOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -181,15 +184,25 @@ export function TenderWorkspace({
   }
 
   useEffect(() => {
-    if (fromQuery) return;
     const url = new URL(window.location.href);
-    url.searchParams.set("stage", active);
-    url.hash = hashForTab(active);
+    const canonical = hashForTab(active);
+    const bare = url.hash.replace(/^#/, "");
+    if (isLegacyHash(url.hash)) {
+      url.hash = canonical;
+      if (!url.searchParams.get("stage")) url.searchParams.set("stage", active);
+    } else if (!fromQuery) {
+      url.searchParams.set("stage", active);
+      url.hash = canonical;
+    } else if (!bare) {
+      url.hash = canonical;
+    } else {
+      return;
+    }
     const next = `${url.pathname}${url.search}${url.hash}`;
     const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     if (current === next) return;
     router.replace(next, { scroll: false });
-  }, [active, fromQuery, router]);
+  }, [active, fromQuery, hash, router]);
 
   function saveNote() {
     setModalError(null);
@@ -280,22 +293,39 @@ export function TenderWorkspace({
   const evidenceHref = active === "interpretation" ? addendumHref : evidenceLibraryHref(tenderId, active);
   const choices = RECOMMENDATION_LABELS.filter((label) => label !== recommendedLabel);
   const noteOnThisStage = reviewStageForTab(active) !== null;
+  const decided = decisionHeading(decisionLabel);
+  const earlier = previousTab(active);
+  const later = nextTab(active);
   const footNote = needsHumanReview
     ? "Needs human review"
     : active === "recommendation"
-      ? "A person approves or overrides this recommendation. Nothing is submitted."
+      ? "A person approves this recommendation. Nothing is submitted."
       : active === "preparation"
         ? preparationToast(planDone, planTotal)
-        : `Review, question or add evidence before approving ${heads[active].title.toLowerCase()}.`;
+        : `Review, question or add evidence before approving ${tabLabel(active).toLowerCase()}.`;
+
+  function goBack() {
+    if (earlier) {
+      select(earlier);
+      return;
+    }
+    router.push("/tenders");
+  }
+
+  function goNext() {
+    if (later) select(later);
+  }
 
   return (
     <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-[0_8px_28px_rgba(23,32,42,0.05)]">
       <div className="px-5 py-4">
-        <p className="inline-flex items-center gap-2 text-sm font-semibold tracking-wide text-confirmed">
-          <span className="size-2 rounded-full bg-confirmed" aria-hidden />
-          {stageHeading(active, decisionLabel)}
+        <p className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold tracking-wide text-confirmed">
+          <span className="inline-flex items-center gap-2">
+            <span className="size-2 rounded-full bg-confirmed" aria-hidden />
+            {stageHeading(active)}
+          </span>
+          {decided && <span>{decided}</span>}
         </p>
-        <h2 className="font-heading mt-2 text-2xl tracking-tight break-words">{title}</h2>
         <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
           <div>
             Buyer <span className="font-semibold text-foreground">{buyer}</span>
@@ -310,7 +340,7 @@ export function TenderWorkspace({
         </dl>
       </div>
 
-      <div className="flex min-w-0 items-center gap-1 overflow-x-auto border-y border-border px-4 py-3" aria-label="Stage progress">
+      <div role="tablist" aria-label="Review stages" className="flex min-w-0 items-center gap-1 overflow-x-auto border-y border-border px-4 py-3">
         {WORKSPACE_TABS.map((tab, index) => {
           const mark = stageMark(tab.id, approval);
           return (
@@ -318,6 +348,10 @@ export function TenderWorkspace({
               {index > 0 && <span className="mx-1 hidden h-px w-4 shrink-0 bg-border sm:block" aria-hidden />}
               <button
                 type="button"
+                role="tab"
+                id={`stage-tab-${tab.id}`}
+                aria-selected={active === tab.id}
+                aria-controls={`stage-panel-${tab.id}`}
                 onClick={() => select(tab.id)}
                 className={cn(
                   "flex min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left text-sm",
@@ -346,30 +380,11 @@ export function TenderWorkspace({
         })}
       </div>
 
-      <div role="tablist" aria-label="Review stages" className="flex min-w-0 flex-wrap gap-1 border-b border-border px-3 py-2">
-        {WORKSPACE_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            id={`stage-tab-${tab.id}`}
-            aria-selected={active === tab.id}
-            aria-controls={`stage-panel-${tab.id}`}
-            onClick={() => select(tab.id)}
-            className={cn(
-              "rounded-md px-3 py-2 text-sm whitespace-nowrap",
-              FOCUS_RING,
-              active === tab.id ? "bg-confirmed/10 font-semibold text-confirmed" : "text-muted-foreground hover:bg-muted",
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
       <div className="px-5 pt-4">
-        <h3 className="font-heading text-xl">{heads[active].title}</h3>
-        <p className="mt-1 text-muted-foreground">{heads[active].summary}</p>
+        <p className={active === "recommendation" ? "font-heading text-2xl tracking-tight" : undefined}>
+          {heads[active].answer}
+        </p>
+        {heads[active].carried && <p className="mt-1 text-muted-foreground">{heads[active].carried}</p>}
       </div>
 
       <div
@@ -381,8 +396,17 @@ export function TenderWorkspace({
         {panels[active]}
       </div>
 
-      <div className="mt-2 flex flex-col gap-3 border-t border-border bg-muted/40 px-4 py-3">
-        {active === "recommendation" && (
+      <div className="mt-2 flex items-center justify-between gap-3 border-t border-border px-4 py-3">
+        <Button type="button" variant="outline" onClick={goBack}>
+          Back
+        </Button>
+        <Button type="button" variant="outline" disabled={later === null} onClick={goNext}>
+          Next
+        </Button>
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-border bg-muted/40 px-4 py-3">
+        {active === "recommendation" && changeOpen && (
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1">
               <Label htmlFor="override-label">Different label</Label>
@@ -435,9 +459,18 @@ export function TenderWorkspace({
             </Button>
             {active === "recommendation" ? (
               <>
-                <Button type="button" variant="outline" disabled={pending} onClick={saveOverride}>
-                  {pending ? "Saving…" : "Override with reason"}
-                </Button>
+                <button
+                  type="button"
+                  className={cn("text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground", FOCUS_RING)}
+                  onClick={() => setChangeOpen((open) => !open)}
+                >
+                  Change recommendation
+                </button>
+                {changeOpen && (
+                  <Button type="button" variant="outline" disabled={pending} onClick={saveOverride}>
+                    {pending ? "Saving…" : "Override with reason"}
+                  </Button>
+                )}
                 <Button type="button" disabled={pending || needsHumanReview} onClick={approveReview}>
                   {pending ? "Saving…" : "Approve"}
                 </Button>

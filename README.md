@@ -311,9 +311,9 @@ The tests call no network service and need no keys.
 
 | Name | Role | Contribution |
 |---|---|---|
-|  |  |  |
-|  |  |  |
-|  |  |  |
+| Claudine Warui | Team Lead | Product design |
+| Mark Mburu | Member | Developer: built the app (agent extraction, rules, database, deployment) |
+| Jimmy | Member | Developer: UI/UX design |
 
 ## Licence
 

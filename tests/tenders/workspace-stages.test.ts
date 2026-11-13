@@ -4,9 +4,11 @@ import {
   approveToast,
   preparationToast,
   reviewPill,
+  stageHeading,
   reviewStageNumber,
   stageMark,
   tabFromHash,
+  tabFromStage,
   type WorkspaceApproval,
 } from "@/lib/tenders/workspace-stages";
 
@@ -56,11 +58,27 @@ describe("workspace stages", () => {
     expect(tabFromHash("#nope")).toBeNull();
   });
 
+  it("reads ?stage= as a tab id, the old hash, or the stage name", () => {
+    expect(tabFromStage("compliance")).toBe("compliance");
+    expect(tabFromStage("can_comply")).toBe("compliance");
+    expect(tabFromStage("#should_bid")).toBe("commercial");
+    expect(tabFromStage("Bid preparation")).toBe("preparation");
+    expect(tabFromStage("nope")).toBeNull();
+    expect(tabFromStage("")).toBeNull();
+    expect(tabFromStage(null)).toBeNull();
+  });
+
   it("names the next stage in the approve toast", () => {
     expect(approveToast("interpretation")).toBe("Interpretation approved. Next: Compliance.");
     expect(approveToast("commercial")).toBe("Commercial approved. Next: Recommendation.");
     expect(preparationToast(0, 0)).toBe("Bid preparation reviewed");
     expect(preparationToast(4, 4)).toBe("Bid preparation reviewed");
-    expect(preparationToast(1, 6)).toBe("1 of 6 done");
+    expect(preparationToast(19, 20)).toBe("19 of 20 · 1 missing");
+  });
+
+  it("names the open tab, and the decision once one is recorded", () => {
+    expect(stageHeading("commercial", null)).toBe("Stage 3 of 5 · Commercial");
+    expect(stageHeading("interpretation", null)).toBe("Stage 1 of 5 · Interpretation");
+    expect(stageHeading("preparation", "Proceed to preparation")).toBe("Decided: Proceed to preparation");
   });
 });

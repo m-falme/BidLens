@@ -6,11 +6,12 @@ import { Upload } from "lucide-react";
 
 import { NAV } from "@/components/app-shell/nav";
 import { CARD_CLASS, PageHeading } from "@/components/app-shell/page-heading";
-import { DecisionBadge, RiskBadge } from "@/components/tenders/markers";
+import { ClosedBadge, DecisionBadge, RiskBadge } from "@/components/tenders/markers";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { listFieldLeads, listTenders, type FieldLeadListItem, type TenderListItem } from "@/lib/db/queries/tenders";
 import { sentenceCase } from "@/lib/format/display";
+import { closingHasPassed } from "@/lib/recommendation/deadline";
 import { presentLeadCopy } from "@/lib/leads/public-names";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +34,7 @@ const LEAD_STATUS_LABEL: Record<string, string> = {
   lost: "Lost",
 };
 
-function TenderRows({ items, empty }: { items: TenderListItem[]; empty: string }) {
+function TenderRows({ items, empty, asOf }: { items: TenderListItem[]; empty: string; asOf: Date }) {
   if (items.length === 0) {
     return <p className="px-5 py-6 text-muted-foreground">{empty}</p>;
   }
@@ -45,6 +46,7 @@ function TenderRows({ items, empty }: { items: TenderListItem[]; empty: string }
         const title = sentenceCase(stored);
         const reference = workbook ? presentLeadCopy(tender.reference) : tender.reference;
         const organization = workbook ? presentLeadCopy(tender.organization) : tender.organization;
+        const closed = closingHasPassed({ closingText: tender.closing, deadlineAt: tender.deadlineAt, asOf });
         return (
           <li
             key={tender.id}
@@ -69,6 +71,7 @@ function TenderRows({ items, empty }: { items: TenderListItem[]; empty: string }
             <div className="flex flex-wrap items-center gap-2 md:justify-end">
               <DecisionBadge label={tender.finalLabel} />
               <RiskBadge band={tender.riskBand} />
+              {closed && <ClosedBadge />}
             </div>
           </li>
         );
@@ -120,6 +123,7 @@ function SectionHead({ title, note }: { title: string; note: string }) {
 async function TenderTabs({ searchParams }: { searchParams: PageProps<"/tenders">["searchParams"] }) {
   await connection();
   const [params, tenders, leads] = await Promise.all([searchParams, listTenders(), listFieldLeads()]);
+  const asOf = new Date();
   const tab: Tab = params.tab === "leads" ? "leads" : "tenders";
   const uploaded = tenders.filter((tender) => tender.pdfSources > 0);
   const imported = tenders.filter((tender) => tender.pdfSources === 0);
@@ -156,7 +160,7 @@ async function TenderTabs({ searchParams }: { searchParams: PageProps<"/tenders"
 
       {tab === "tenders" ? (
         <section className={CARD_CLASS}>
-          <TenderRows items={uploaded} empty="No tenders uploaded yet. Add a tender PDF to start." />
+          <TenderRows items={uploaded} asOf={asOf} empty="No tenders uploaded yet. Add a tender PDF to start." />
         </section>
       ) : (
         <div className="flex flex-col gap-4">
@@ -166,7 +170,7 @@ async function TenderTabs({ searchParams }: { searchParams: PageProps<"/tenders"
           </section>
           <section className={CARD_CLASS}>
             <SectionHead title="Imported leads" note="Tender notices imported from the pipeline sheet, with no PDF yet." />
-            <TenderRows items={imported} empty="No imported leads." />
+            <TenderRows items={imported} asOf={asOf} empty="No imported leads." />
           </section>
         </div>
       )}

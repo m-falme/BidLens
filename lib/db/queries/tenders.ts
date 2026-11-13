@@ -4,6 +4,7 @@ import { cache } from "react";
 
 import { DEMO_COMPANY_NAME } from "@/lib/app-config";
 import { asDecision, closingLabel, matchCountyName, type DecisionChoice } from "@/lib/format/display";
+import { preferredClosing } from "@/lib/recommendation/deadline";
 import { asRecommendationLabel, type RecommendationLabel } from "@/lib/recommendation/labels";
 import { latestLabelByTender } from "@/lib/recommendation/trail";
 import { RISK_BANDS, type RiskBand } from "@/lib/risk/county-score";
@@ -77,13 +78,28 @@ function fieldValue(fields: readonly { key: string; value: string | null }[], ke
   return fields.find((field) => field.key === key && field.value)?.value ?? null;
 }
 
+function nestedRole(sources: { role: string } | { role: string }[] | null): string {
+  if (!sources) return "main";
+  return Array.isArray(sources) ? (sources[0]?.role ?? "main") : sources.role;
+}
+
+function listedClosing(
+  fields: readonly { key: string; value: string | null; sources: { role: string } | { role: string }[] | null }[],
+  deadlineAt: string | null,
+): string | null {
+  const chosen = preferredClosing(
+    fields.map((field) => ({ key: field.key, value: field.value, role: nestedRole(field.sources) })),
+  );
+  return closingLabel(chosen?.value ?? null, deadlineAt);
+}
+
 export async function listTenders(): Promise<TenderListItem[]> {
   const db = getServiceClient();
   const [{ data, error }, risk, recorded] = await Promise.all([
     db
       .from("opportunities")
       .select(
-        "id, title, organization, reference, created_at, deadline_at, buyer_county, sources(kind, role), fields(status, key, value)",
+        "id, title, organization, reference, created_at, deadline_at, buyer_county, sources(kind, role), fields(status, key, value, sources(role))",
       )
       .eq("type", "procurement")
       .order("created_at", { ascending: false }),
@@ -115,7 +131,7 @@ export async function listTenders(): Promise<TenderListItem[]> {
       fieldCount: o.fields.length,
       needsHuman: o.fields.filter((f) => f.status === "needs_human").length,
       county: countyName,
-      closing: closingLabel(fieldValue(o.fields, "closing_datetime"), o.deadline_at),
+      closing: listedClosing(o.fields, o.deadline_at),
       deadlineAt: o.deadline_at,
       finalLabel: labels.get(o.id) ?? null,
       riskBand: asBand(county?.band ?? null),
@@ -404,6 +420,12 @@ export async function findSourceBySha256(sha256: string) {
     .maybeSingle();
   if (error) fail("check duplicate upload", error);
   return data;
+}
+
+export async function getTenderTitle(id: string): Promise<string | null> {
+  const { data, error } = await getServiceClient().from("opportunities").select("title").eq("id", id).maybeSingle();
+  if (error) fail("load tender title", error);
+  return data?.title ?? null;
 }
 
 export async function opportunityExists(id: string): Promise<boolean> {

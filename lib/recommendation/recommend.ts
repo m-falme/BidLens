@@ -13,8 +13,10 @@ import {
  * 1. Consider declining — a "could disqualify us" item cannot be fixed before the deadline,
  *    or payment risk is Severe and no contract value is recorded.
  * 2. Resolve blockers — a missing mandatory document or other gap can still be fixed.
- * 3. Seek clarification — deadline, security or evaluation is blank in the source or needs a person.
- * 4. Proceed to preparation — none of the above.
+ * 3. Seek clarification — deadline, security or evaluation is blank in the source or needs a person,
+ *    or bid-security amounts disagree, or an addendum conflicts with the main document.
+ * 4. Consider declining — the closing date has passed. This never returns Proceed.
+ * 5. Proceed to preparation — none of the above.
  */
 
 /** Deadline, security and evaluation. Other blanks do not fire the clarification rule. */
@@ -65,6 +67,10 @@ export interface RecommendationInput {
   contractValueKes: number | null;
   /** Whole days until the deadline. Null when no deadline is confirmed. Negative when it has passed. */
   daysUntilDeadline: number | null;
+  /** The main document states two different bid-security amounts. */
+  securityConflict?: boolean;
+  /** Addendum lines that disagree with the main document. */
+  addendumConflicts?: number;
 }
 
 export function isClarificationKey(key: string): key is ClarificationKey {
@@ -148,6 +154,38 @@ function blockers(gaps: readonly MatchedRequirement[], days: number | null): Rec
   return { label: "resolve_blockers", rule: "fixable_gaps", reasons: reasons.slice(0, 4) };
 }
 
+function conflictReasons(input: RecommendationInput): RecommendationReason[] {
+  const reasons: RecommendationReason[] = [];
+  if (input.securityConflict) {
+    reasons.push({
+      text: "Bid security amounts disagree in this tender.",
+      item: "Bid security",
+    });
+  }
+  const count = input.addendumConflicts ?? 0;
+  if (count > 0) {
+    reasons.push({
+      text:
+        count === 1
+          ? "An addendum conflicts with the main document."
+          : `${count} addendum conflicts still need a decision.`,
+      item: "Addendum",
+    });
+  }
+  return reasons;
+}
+
+function deadlinePassed(): Recommendation {
+  return {
+    label: "consider_declining",
+    rule: "deadline_passed",
+    reasons: [
+      { text: "Closing date has passed.", item: "Closing date" },
+      { text: "A closed tender is not taken forward to preparation.", item: "Closing date" },
+    ],
+  };
+}
+
 function clarification(facts: readonly KeyFact[]): Recommendation {
   const reasons: RecommendationReason[] = facts.slice(0, 4).map((fact) => ({
     text:
@@ -215,7 +253,16 @@ export function recommend(input: RecommendationInput): Recommendation {
     (fact) =>
       isClarificationKey(fact.key) && (fact.status === "blank_in_source" || fact.status === "needs_human"),
   );
-  if (unclear.length > 0) return clarification(unclear);
+  const conflicts = conflictReasons(input);
+  if (unclear.length > 0) {
+    const result = clarification(unclear);
+    return { ...result, reasons: [...result.reasons, ...conflicts].slice(0, 4) };
+  }
+  if (conflicts.length > 0) {
+    return { label: "seek_clarification", rule: "document_conflict", reasons: conflicts.slice(0, 4) };
+  }
+
+  if (input.daysUntilDeadline !== null && input.daysUntilDeadline < 0) return deadlinePassed();
 
   return proceed(input);
 }

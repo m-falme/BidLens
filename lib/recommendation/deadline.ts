@@ -40,6 +40,46 @@ export function daysUntilDeadline(input: {
   return nairobiDayNumber(instant) - nairobiDayNumber(input.asOf);
 }
 
+export interface ClosingCandidate {
+  key: string;
+  value: string | null;
+  role: string;
+}
+
+/**
+ * The closing date that counts: an addendum line when one is present, otherwise the main document.
+ * Other roles are ignored. A blank value is not a date.
+ */
+export function preferredClosing<T extends ClosingCandidate>(fields: readonly T[]): T | null {
+  const closings = fields.filter((field) => field.key === "closing_datetime" && field.value?.trim());
+  return closings.find((field) => field.role === "addendum") ?? closings.find((field) => field.role === "main") ?? null;
+}
+
+/**
+ * Days until the preferred written closing date. A stored deadline is used only when that
+ * written date is missing or does not contain a day, month and year.
+ */
+export function daysUntilClosing(input: {
+  closingText: string | null;
+  deadlineAt: string | null;
+  asOf: Date;
+}): number | null {
+  if (input.closingText?.trim()) {
+    const fromText = daysUntilDeadline({ deadlineAt: null, closingText: input.closingText, asOf: input.asOf });
+    if (fromText !== null) return fromText;
+  }
+  return daysUntilDeadline({ deadlineAt: input.deadlineAt, closingText: null, asOf: input.asOf });
+}
+
+export function closingHasPassed(input: {
+  closingText: string | null;
+  deadlineAt: string | null;
+  asOf: Date;
+}): boolean {
+  const days = daysUntilClosing(input);
+  return days !== null && days < 0;
+}
+
 function parseInstant(value: string | null): Date | null {
   if (!value) return null;
   const date = new Date(value);

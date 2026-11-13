@@ -5,7 +5,7 @@ import {
   documentFromRequirement,
   documentIsExpired,
 } from "@/lib/company/papers";
-import { matchRequirements, type ProfileCapability, type RequirementInput } from "@/lib/readiness/match";
+import { isCompanyRecordName, matchRequirements, type ProfileCapability, type RequirementInput } from "@/lib/readiness/match";
 
 function req(text: string): RequirementInput {
   return { text, category: "mandatory", pageNo: 5, quote: text };
@@ -70,7 +70,7 @@ describe("expiry check", () => {
 });
 
 describe("add a requirement that is not on the list", () => {
-  it("flags it, then links it once the new document is marked Have", () => {
+  it("flags a new requirement and does not use the tender line as the company record", () => {
     const before = matchRequirements([req(bond)], papers, "2026-11-12");
     expect(before.items[0]).toMatchObject({ match: "missing", unlisted: true, capabilityId: null });
 
@@ -89,22 +89,26 @@ describe("add a requirement that is not on the list", () => {
       expiresOn: added.expiresOn,
       neverExpires: added.neverExpires,
     };
+    expect(isCompanyRecordName(added.name)).toBe(false);
     const afterAdd = matchRequirements([req(bond)], [...papers, listed], "2026-11-12");
-    expect(afterAdd.items[0]).toMatchObject({ match: "missing", unlisted: false, capabilityId: null });
-    expect(afterAdd.items[0].rationale).toMatch(/Don't have/);
+    expect(afterAdd.items[0].capabilityName).not.toBe(added.name);
+    expect(afterAdd.items[0].rationale).not.toContain(added.name);
 
-    const held = matchRequirements(
-      [req(bond)],
-      [...papers, { ...listed, holding: "have" }],
-      "2026-11-12",
-    );
+    const library: ProfileCapability = {
+      ...listed,
+      id: "library-bond",
+      name: "Bid bond",
+      holding: "have",
+    };
+    const held = matchRequirements([req(bond)], [...papers, library], "2026-11-12");
     expect(held.items[0]).toMatchObject({
       match: "met",
-      capabilityId: "added-bond",
-      capabilityName: added.name,
+      capabilityId: "library-bond",
+      capabilityName: "Bid bond",
       onChecklist: true,
       unlisted: false,
     });
+    expect(held.items[0].rationale).not.toContain("Kshs");
   });
 
   it("does not treat a known paper or a form as a new document", () => {

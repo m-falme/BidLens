@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { shellCrumb } from "@/components/app-shell/nav";
 import {
   activeReviewNote,
+  activeTenderStats,
   awaitingDecisionNote,
   evidenceCounts,
   evidenceNote,
@@ -53,6 +54,10 @@ describe("shellCrumb", () => {
 
 describe("overview stats", () => {
   it("counts reviews, decisions, expiry and the soonest closing date", () => {
+    expect(activeTenderStats([tender(), tender({ id: "closed", deadlineAt: "2026-11-01T08:00:00+03:00", closing: "1 November 2026" })], AS_OF)).toEqual({
+      total: 1,
+      unreviewed: 1,
+    });
     expect(activeReviewNote(1, 2)).toBe("1 with no review yet");
     expect(activeReviewNote(0, 2)).toBe("Each one has a review");
     expect(awaitingDecisionNote(2)).toBe("No bid decision recorded");

@@ -7,6 +7,7 @@ import {
   isDocumentToGet,
   mergeSaved,
   planProgress,
+  preparationIsDone,
   type PlanField,
   type PlanRequirement,
 } from "@/lib/plan/build";
@@ -189,9 +190,56 @@ describe("buildActionPlan", () => {
     ]);
     expect(rows[0]).toMatchObject({ ownerName: "Amina", dueOn: "2026-11-18", done: true });
     expect(rows[1]).toMatchObject({ ownerName: "", dueOn: "", done: false });
-    expect(planProgress(rows).label).toBe("1 of " + String(rows.length) + " done");
+    const progress = planProgress(rows);
+    expect(progress.label).toBe(`1 of ${rows.length} · ${rows.length - 1} missing`);
+    expect(preparationIsDone(progress)).toBe(false);
     const marked = rows.map((row, index) => ({ ...row, done: index < 3 }));
-    expect(planProgress(marked)).toEqual({ done: 3, total: marked.length, label: `3 of ${marked.length} done` });
+    expect(planProgress(marked).label).toBe(`3 of ${marked.length} · ${marked.length - 3} missing`);
+    const nineteen = Array.from({ length: 20 }, (_, index) => ({ done: index < 19 }));
+    expect(planProgress(nineteen)).toEqual({ done: 19, total: 20, missing: 1, label: "19 of 20 · 1 missing" });
+    const allDone = nineteen.map(() => ({ done: true }));
+    expect(planProgress(allDone)).toEqual({ done: 20, total: 20, missing: 0, label: "20 of 20 done" });
+    expect(preparationIsDone(planProgress(allDone))).toBe(true);
+  });
+
+  it("uses the addendum closing date when one is present", () => {
+    const dated = buildActionPlan({
+      requirements: [],
+      fields: [
+        field({
+          key: "closing_datetime",
+          status: "source_confirmed",
+          value: "20 November 2026",
+          pageNo: 2,
+          role: "main",
+        }),
+        field({
+          key: "closing_datetime",
+          status: "source_confirmed",
+          value: "1 December 2026",
+          pageNo: 3,
+          role: "addendum",
+        }),
+      ],
+      deadlineAt: "2026-11-20T08:00:00+03:00",
+      asOf: AS_OF,
+    });
+    expect(dated.dates[0].detail).toContain("1 December 2026");
+    expect(dated.dates[0].pageNo).toBe(3);
+    expect(dated.dates[0].detail).not.toContain("20 November 2026");
+  });
+
+  it("does not show a tender requirement line as a company record", () => {
+    const line = "Attach a bid bond of Kshs 800,000";
+    const dated = buildActionPlan({
+      requirements: [requirement({ text: line, match: "missing", documentName: line, pageNo: 13 })],
+      fields: [],
+      deadlineAt: null,
+      asOf: AS_OF,
+    });
+    expect(dated.documents[0].detail).toBe("Missing.");
+    expect(dated.documents[0].detail).not.toContain("Company record");
+    expect(dated.documents[0].detail).not.toContain(line);
   });
 });
 

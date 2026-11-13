@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { summarizeReview, type ReviewField } from "@/lib/tenders/review";
+import { needsHumanReview, summarizeReview, type ReviewField } from "@/lib/tenders/review";
 
 let n = 0;
 const f = (source: string, key: string, value: string | null, status: ReviewField["status"]): ReviewField => ({
@@ -34,6 +34,13 @@ describe("summarizeReview", () => {
     expect(summary.byStatus).toEqual({ source_confirmed: 2, ai_inferred: 1, blank_in_source: 1, needs_human: 1 });
     expect(summary.conflicts).toHaveLength(1);
     expect(summary.needsReview).toBe(2);
+  });
+
+  it("needs a person when nothing is source-confirmed or no mandatory requirement was extracted", () => {
+    expect(needsHumanReview({ sourceConfirmed: 0, mandatoryRequirements: 4 })).toBe(true);
+    expect(needsHumanReview({ sourceConfirmed: 12, mandatoryRequirements: 0 })).toBe(true);
+    expect(needsHumanReview({ sourceConfirmed: 0, mandatoryRequirements: 0 })).toBe(true);
+    expect(needsHumanReview({ sourceConfirmed: 3, mandatoryRequirements: 8 })).toBe(false);
   });
 
   it("has no conflicts without an addendum", () => {

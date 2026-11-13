@@ -30,7 +30,7 @@ import {
   sentenceCase,
 } from "@/lib/format/display";
 import { presentLeadCopy, sourceLabel } from "@/lib/leads/public-names";
-import { buildActionPlan, mergeSaved, planProgress, type PlanField } from "@/lib/plan/build";
+import { buildActionPlan, mergeSaved, planProgress, preparationIsDone, type PlanField } from "@/lib/plan/build";
 import { FIELD_STATUSES } from "@/lib/db/vocab";
 import {
   FINANCING_RATE,
@@ -41,7 +41,7 @@ import {
   typicalDelayDays,
 } from "@/lib/recommendation/profit";
 import { isWithdrawnByAddendum, matchRequirements } from "@/lib/readiness/match";
-import { daysUntilDeadline } from "@/lib/recommendation/deadline";
+import { daysUntilClosing, preferredClosing } from "@/lib/recommendation/deadline";
 import { RECOMMENDATION_LABEL, RULE_TEXT } from "@/lib/recommendation/labels";
 import { isClarificationKey, recommend } from "@/lib/recommendation/recommend";
 import { decisionTrail, latestBidDecision } from "@/lib/recommendation/trail";
@@ -49,7 +49,7 @@ import type { GroupStats } from "@/lib/tenders/extract-pipeline";
 import { findBidSecurityConflicts } from "@/lib/tenders/document-conflicts";
 import type { WorkspaceTabId } from "@/lib/tenders/workspace-stages";
 import { ADDENDUM_FIELD_GROUPS, FIELD_SPECS, MAIN_FIELD_GROUPS } from "@/lib/tenders/field-catalog";
-import { summarizeReview } from "@/lib/tenders/review";
+import { needsHumanReview, summarizeReview } from "@/lib/tenders/review";
 import { commercialFinding, complianceFinding, interpretationFinding, latestByStage } from "@/lib/tenders/stage-review";
 import { buildWhatMatters } from "@/lib/tenders/what-matters";
 import { ActionPlan } from "./action-plan";
@@ -78,9 +78,16 @@ function failedKeys(run: RunRecord | undefined): Set<string> {
   return new Set(failed);
 }
 
-async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["params"] }) {
+async function TenderDetail({
+  params,
+  searchParams,
+}: {
+  params: PageProps<"/tenders/[id]">["params"];
+  searchParams: PageProps<"/tenders/[id]">["searchParams"];
+}) {
   await connection();
-  const { id } = await params;
+  const [{ id }, query] = await Promise.all([params, searchParams]);
+  const requestedStage = typeof query.stage === "string" ? query.stage : null;
   if (!z.uuid().safeParse(id).success) notFound();
   const [detail, counties, stageReviews, bidDecisions, workspaceName, savedActions] = await Promise.all([
     getTenderDetail(id),
@@ -227,20 +234,21 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
   const countyLabel = workbookLead ? presentLeadCopy(countyText) : countyText;
   const matchedCounty = matchCountyName(countyLabel, counties.map((county) => county.county));
   const countyRisk = counties.find((county) => county.county === matchedCounty);
-  const closingText = viewFields.find((field) => field.key === "closing_datetime" && field.value)?.value ?? null;
-  const closing = closingLabel(workbookLead ? presentLeadCopy(closingText) : closingText, opportunity.deadline_at);
-  const closingField = viewFields.find(
-    (field) => field.key === "closing_datetime" && roleOf(field.source_id) === "main",
+  const closingField = preferredClosing(
+    viewFields.map((field) => ({
+      key: field.key,
+      value: field.value,
+      role: roleOf(field.source_id),
+    })),
   );
-  const closingUsable =
-    closingField && (closingField.status === "source_confirmed" || closingField.status === "ai_inferred")
-      ? closingField.value
-      : null;
-  const daysUntil = daysUntilDeadline({
+  const closingText = closingField?.value ?? null;
+  const closing = closingLabel(workbookLead ? presentLeadCopy(closingText) : closingText, opportunity.deadline_at);
+  const daysUntil = daysUntilClosing({
+    closingText,
     deadlineAt: opportunity.deadline_at,
-    closingText: closingUsable,
     asOf: new Date(),
   });
+  const closed = daysUntil !== null && daysUntil < 0;
   const facts = viewFields.flatMap((field) => {
     if (!isClarificationKey(field.key)) return [];
     const label = FIELD_SPECS[field.key].label;
@@ -259,6 +267,8 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
     band: countyRisk?.band ?? null,
     contractValueKes: opportunity.contract_value_kes,
     daysUntilDeadline: daysUntil,
+    securityConflict: securityConflict !== null,
+    addendumConflicts: summary.conflicts.length,
   });
   const latestDecision = latestBidDecision(bidDecisions);
   const trail = decisionTrail(stageReviews, bidDecisions);
@@ -339,17 +349,24 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
 
       <TenderWorkspace
         tenderId={opportunity.id}
+        requestedStage={requestedStage}
         title={heading}
         buyer={displayOrganization ? sentenceCase(displayOrganization) : "Buyer not stated"}
         reference={displayReference ?? "Not stated"}
         closing={closing ? sentenceCase(closing) : "Not stated"}
+        closed={closed}
+        decisionLabel={latestDecision ? RECOMMENDATION_LABEL[latestDecision.finalLabel] : null}
+        needsHumanReview={needsHumanReview({
+          sourceConfirmed: summary.byStatus.source_confirmed,
+          mandatoryRequirements: readiness.items.length,
+        })}
         addendumHref={hasMainPdf ? `/tenders/new?addendum=${opportunity.id}` : "/tenders/new"}
         approval={{
           canBid: reviews.can_bid !== null,
           canComply: reviews.can_comply !== null,
           shouldBid: reviews.should_bid !== null,
           decision: latestDecision !== null,
-          preparation: plan.total === 0 || plan.done === plan.total,
+          preparation: preparationIsDone(plan),
         }}
         heads={heads}
         recommendedLabel={recommendation.label}
@@ -371,6 +388,7 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
         compliance={
           <>
             <ReadinessCard
+              tenderId={opportunity.id}
               result={readiness}
               withdrawn={withdrawn.map((field) => field.value!.replace(/\s+/g, " ").slice(0, 90))}
             />
@@ -455,7 +473,7 @@ function PaymentCard({ risk }: { risk: CountyRiskListItem | undefined }) {
 export default function TenderPage(props: PageProps<"/tenders/[id]">) {
   return (
     <Suspense fallback={<TenderLoading />}>
-      <TenderDetail params={props.params} />
+      <TenderDetail params={props.params} searchParams={props.searchParams} />
     </Suspense>
   );
 }

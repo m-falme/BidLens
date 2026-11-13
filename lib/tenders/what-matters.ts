@@ -1,4 +1,5 @@
 import type { FieldStatus } from "@/lib/db/vocab";
+import { spelledCountWithUnit } from "@/lib/format/display";
 
 import { formatKes, valueHasAmount, type BidSecurityConflict } from "./document-conflicts";
 
@@ -97,7 +98,11 @@ export function buildWhatMatters(input: {
   }
 
   const advance = stated(preferMain(fields, "advance_payment"), "Advance payment");
-  const days = stated(preferMain(fields, "payment_days"), "Payment period");
+  const daysField = preferMain(fields, "payment_days");
+  const days = stated(
+    daysField?.value ? { ...daysField, value: spelledCountWithUnit(daysField.value, "days") } : daysField,
+    "Payment period",
+  );
   const paymentParts = [advance, days].filter((part) => part !== null);
   if (paymentParts.length > 0) {
     points.push({

@@ -31,6 +31,7 @@ async function EvidenceBody() {
 
   return (
     <>
+      <PageHeading eyebrow="Workspace" title={NAV.evidence.title} description={NAV.evidence.description} />
       <div className="grid gap-3 sm:grid-cols-3">
         {stats.map((stat) => (
           <section key={stat.label} className={`${CARD_CLASS} px-5 py-4`}>
@@ -50,10 +51,10 @@ async function EvidenceBody() {
 export default function EvidencePage() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <PageHeading eyebrow="Workspace" title={NAV.evidence.title} description={NAV.evidence.description} />
       <Suspense
         fallback={
           <div className="flex flex-col gap-4">
+            <Skeleton className="h-10 w-72" />
             <Skeleton className="h-28 w-full" />
             <Skeleton className="h-96 w-full" />
           </div>

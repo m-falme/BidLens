@@ -1,6 +1,7 @@
 import type { FieldStatus } from "@/lib/db/vocab";
 import { closingLabel } from "@/lib/format/display";
-import { daysUntilDeadline, parseClosingText } from "@/lib/recommendation/deadline";
+import { daysUntilClosing, daysUntilDeadline, parseClosingText, preferredClosing } from "@/lib/recommendation/deadline";
+import { isCompanyRecordName } from "@/lib/readiness/match";
 import { FIELD_SPECS, SCALAR_FIELD_KEYS, type TenderFieldKey } from "@/lib/tenders/field-catalog";
 
 /**
@@ -144,10 +145,22 @@ export function mergeSaved(plan: ActionPlan, saved: readonly SavedAction[]): Pla
   });
 }
 
-export function planProgress(rows: readonly { done: boolean }[]): { done: number; total: number; label: string } {
+export function planProgress(rows: readonly { done: boolean }[]): {
+  done: number;
+  total: number;
+  missing: number;
+  label: string;
+} {
   const total = rows.length;
   const done = rows.filter((row) => row.done).length;
-  return { done, total, label: `${done} of ${total} done` };
+  const missing = total - done;
+  const label = missing === 0 ? `${done} of ${total} done` : `${done} of ${total} · ${missing} missing`;
+  return { done, total, missing, label };
+}
+
+/** Bid preparation is done only when nothing is still missing. An empty plan has nothing missing. */
+export function preparationIsDone(progress: { missing: number }): boolean {
+  return progress.missing === 0;
 }
 
 function labelFor(field: PlanField): string {
@@ -207,7 +220,8 @@ function documentDrafts(requirements: readonly PlanRequirement[]): Draft[] {
   return requirements.filter(isDocumentToGet).map((requirement) => {
     const text = line(requirement.text);
     const state = requirement.expired ? "Expired" : "Missing";
-    const record = requirement.documentName?.replace(/\s+/g, " ").trim();
+    const named = requirement.documentName?.replace(/\s+/g, " ").trim() ?? "";
+    const record = named && isCompanyRecordName(named) ? named : "";
     return {
       section: "documents",
       kind: "document",
@@ -317,10 +331,9 @@ function dateDraft(
 }
 
 function dateDrafts(fields: readonly PlanField[], deadlineAt: string | null, asOf: Date): Draft[] {
-  const closings = fields.filter((field) => field.key === "closing_datetime" && field.value);
-  const closing = closings.find((field) => field.role === "addendum") ?? closings.find((field) => field.role === "main") ?? null;
+  const closing = preferredClosing(fields);
   const written = closingLabel(closing?.value ?? null, deadlineAt);
-  const days = daysUntilDeadline({ deadlineAt, closingText: closing?.value ?? null, asOf });
+  const days = daysUntilClosing({ closingText: closing?.value ?? null, deadlineAt, asOf });
   const drafts = [
     dateDraft("submission", "Submission deadline", written, closing?.pageNo ?? null, written ? days : null),
   ];

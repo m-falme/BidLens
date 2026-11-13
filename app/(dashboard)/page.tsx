@@ -3,13 +3,16 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
+import { ClosedBadge } from "@/components/tenders/markers";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NAV } from "@/components/app-shell/nav";
 import { loadOverview } from "@/lib/db/queries/overview";
 import { sentenceCase } from "@/lib/format/display";
+import { closingHasPassed } from "@/lib/recommendation/deadline";
 import {
   activeReviewNote,
+  activeTenderStats,
   awaitingDecisionNote,
   evidenceCounts,
   evidenceNote,
@@ -45,7 +48,7 @@ async function OverviewBody() {
   const snapshot = await loadOverview();
   const asOf = new Date();
   const uploaded = snapshot.uploaded;
-  const unreviewed = uploaded.filter((tender) => tender.reviewedStages.length === 0).length;
+  const active = activeTenderStats(uploaded, asOf);
   const awaiting = uploaded.filter((tender) => tender.finalLabel === null).length;
   const evidence = evidenceCounts(snapshot.documents, nairobiDate(asOf));
   const deadline = upcomingDeadline(uploaded, asOf);
@@ -55,7 +58,14 @@ async function OverviewBody() {
     when: formatReviewedAt,
   });
   const stats = [
-    { label: "Active tenders", value: String(uploaded.length), note: activeReviewNote(unreviewed, uploaded.length) },
+    {
+      label: "Active tenders",
+      value: String(active.total),
+      note:
+        active.total === 0 && uploaded.length > 0
+          ? "None still open"
+          : activeReviewNote(active.unreviewed, active.total),
+    },
     { label: "Awaiting a decision", value: String(awaiting), note: awaitingDecisionNote(awaiting) },
     { label: "Evidence on file", value: String(evidence.onFile), note: evidenceNote(evidence.expired) },
     { label: "Upcoming deadline", value: deadline.value, note: deadline.note },
@@ -110,6 +120,11 @@ async function OverviewBody() {
                 const pill = rowPill(tender);
                 const buyer = tender.buyer?.trim() ? sentenceCase(tender.buyer) : "Buyer not stated";
                 const meta = [buyer, tender.reference].filter(Boolean).join(" · ");
+                const closed = closingHasPassed({
+                  closingText: tender.closing,
+                  deadlineAt: tender.deadlineAt,
+                  asOf,
+                });
                 return (
                   <li key={tender.id} className="flex gap-3 border-t border-border/80 px-5 py-4">
                     <div className="min-w-0 flex-1">
@@ -122,12 +137,7 @@ async function OverviewBody() {
                       <p className="mt-1 text-sm text-muted-foreground">{meta}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-3">
                         <Pill tone={pill.tone}>{pill.label}</Pill>
-                        <Link
-                          href={`/tenders/${tender.id}#should_bid`}
-                          className="text-sm font-medium text-brand hover:underline"
-                        >
-                          Assess viability
-                        </Link>
+                        {closed && <ClosedBadge />}
                       </div>
                     </div>
                     <p className="max-w-40 shrink-0 text-right text-sm text-muted-foreground">

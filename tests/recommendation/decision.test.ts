@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { parseBidDecision } from "@/lib/recommendation/decision";
 import { decisionTrail, latestBidDecision } from "@/lib/recommendation/trail";
-import { daysUntilDeadline } from "@/lib/recommendation/deadline";
+import { closingHasPassed, daysUntilClosing, daysUntilDeadline, preferredClosing } from "@/lib/recommendation/deadline";
 import type { BidDecisionRecord } from "@/lib/recommendation/decision";
 import type { StageReviewRecord } from "@/lib/tenders/stage-review";
 
@@ -140,5 +140,24 @@ describe("daysUntilDeadline", () => {
     ).toBe(15);
     expect(daysUntilDeadline({ deadlineAt: null, closingText: "to be advised", asOf })).toBeNull();
     expect(daysUntilDeadline({ deadlineAt: null, closingText: null, asOf })).toBeNull();
+  });
+});
+
+describe("preferred closing date", () => {
+  const asOf = new Date("2026-11-13T00:30:00+03:00");
+
+  it("uses the addendum closing date when one is present, otherwise the main document", () => {
+    const fields = [
+      { key: "closing_datetime", value: "20 November 2026", role: "main" },
+      { key: "bid_security", value: "KSh 500,000", role: "addendum" },
+      { key: "closing_datetime", value: "1 December 2026", role: "addendum" },
+    ];
+    expect(preferredClosing(fields)?.value).toBe("1 December 2026");
+    expect(preferredClosing(fields.filter((field) => field.role !== "addendum"))?.value).toBe("20 November 2026");
+    expect(preferredClosing([])).toBeNull();
+    expect(daysUntilClosing({ closingText: "1 December 2026", deadlineAt: "2026-11-20T08:00:00+03:00", asOf })).toBe(18);
+    expect(daysUntilClosing({ closingText: "to be advised", deadlineAt: "2026-11-20T08:00:00+03:00", asOf })).toBe(7);
+    expect(closingHasPassed({ closingText: "1 November 2026", deadlineAt: null, asOf })).toBe(true);
+    expect(closingHasPassed({ closingText: "20 November 2026", deadlineAt: null, asOf })).toBe(false);
   });
 });

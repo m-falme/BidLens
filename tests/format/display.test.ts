@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { closingLabel, matchCountyName, sentenceCase } from "@/lib/format/display";
+import { closingLabel, matchCountyName, riskChipLabel, sentenceCase, spelledCountWithUnit } from "@/lib/format/display";
 
 describe("sentenceCase", () => {
   it("lowers a shouted title and keeps a normal one", () => {
@@ -23,6 +23,22 @@ describe("matchCountyName", () => {
     expect(matchCountyName("Makueni", counties)).toBe("Makueni");
     expect(matchCountyName("National", counties)).toBeNull();
     expect(matchCountyName(null, counties)).toBeNull();
+  });
+});
+
+describe("risk chip and spelled counts", () => {
+  it("names the county payment-risk band", () => {
+    expect(riskChipLabel("severe")).toBe("County payment risk: Severe");
+    expect(riskChipLabel("low")).toBe("County payment risk: Low");
+    expect(riskChipLabel(null)).toBe("County payment risk: No score");
+    expect(riskChipLabel("unknown")).toBe("County payment risk: No score");
+  });
+
+  it("renders a spelled count with its unit", () => {
+    expect(spelledCountWithUnit("sixty (60)", "days")).toBe("60 days");
+    expect(spelledCountWithUnit("one (1)", "days")).toBe("1 day");
+    expect(spelledCountWithUnit("twenty percent (20%)", "days")).toBe("twenty percent (20%)");
+    expect(spelledCountWithUnit("30 days", "days")).toBe("30 days");
   });
 });
 

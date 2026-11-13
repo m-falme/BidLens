@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { profileInitials } from "@/lib/overview/build";
 
+import { BackArrow, BackArrowLabel } from "./back-arrow";
 import { shellCrumb } from "./nav";
 
 function Crumb({ pathname }: { pathname: string | null }) {
@@ -28,6 +29,9 @@ export function SiteHeader({ companyName }: { companyName: string | null }) {
   return (
     <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-card px-4 md:px-8">
       <SidebarTrigger className="-ml-1" />
+      <Suspense fallback={<BackArrowLabel />}>
+        <BackArrow />
+      </Suspense>
       <Suspense fallback={<Crumb pathname={null} />}>
         <LiveCrumb />
       </Suspense>

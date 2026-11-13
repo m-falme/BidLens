@@ -207,6 +207,68 @@ describe("recommend", () => {
     expectReasons(result);
   });
 
+  it("does not proceed when the closing date has passed", () => {
+    const result = recommend(
+      input({
+        readiness: readiness([item({ text: "Certificate of incorporation", match: "met", disqualifying: false })]),
+        daysUntilDeadline: -1,
+        facts: [fact({ key: "closing_datetime", status: "source_confirmed", label: "Closing date and time" })],
+      }),
+    );
+    expect(result.label).toBe("consider_declining");
+    expect(result.label).not.toBe("proceed_to_preparation");
+    expect(result.rule).toBe("deadline_passed");
+    expect(result.reasons.some((reason) => reason.text === "Closing date has passed.")).toBe(true);
+    expectReasons(result);
+  });
+
+  it("keeps an earlier decline rule ahead of a past closing date", () => {
+    const result = recommend(
+      input({
+        readiness: readiness([item({ text: "ICTA certification", match: "missing", disqualifying: true })]),
+        daysUntilDeadline: -3,
+      }),
+    );
+    expect(result.rule).toBe("unfixable_disqualifier");
+  });
+
+  it("seeks clarification when bid security disagrees or an addendum conflicts", () => {
+    const security = recommend(
+      input({
+        readiness: readiness([item({ text: "Certificate of incorporation", match: "met", disqualifying: false })]),
+        securityConflict: true,
+      }),
+    );
+    expect(security.label).toBe("seek_clarification");
+    expect(security.rule).toBe("document_conflict");
+    expect(security.reasons.some((reason) => reason.text === "Bid security amounts disagree in this tender.")).toBe(true);
+
+    const addendum = recommend(
+      input({
+        readiness: readiness([]),
+        addendumConflicts: 1,
+      }),
+    );
+    expect(addendum.label).toBe("seek_clarification");
+    expect(addendum.reasons.some((reason) => reason.text === "An addendum conflicts with the main document.")).toBe(true);
+
+    const both = recommend(input({ readiness: readiness([]), securityConflict: true, addendumConflicts: 2 }));
+    expect(both.reasons.map((reason) => reason.item)).toEqual(["Bid security", "Addendum"]);
+  });
+
+  it("keeps a fixable gap ahead of a document conflict", () => {
+    const result = recommend(
+      input({
+        readiness: readiness([item({ text: "Bid bond from a bank licensed in Kenya", match: "missing", disqualifying: true })]),
+        daysUntilDeadline: 21,
+        securityConflict: true,
+        addendumConflicts: 1,
+      }),
+    );
+    expect(result.label).toBe("resolve_blockers");
+    expect(result.rule).toBe("fixable_gaps");
+  });
+
   it("caps a long list of reasons at four", () => {
     const items = [1, 2, 3, 4, 5].map((n) =>
       item({ text: `National Construction Authority licence ${n}`, match: "missing", disqualifying: true }),

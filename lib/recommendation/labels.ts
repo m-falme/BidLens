@@ -30,6 +30,8 @@ export const RECOMMENDATION_RULES = [
   "severe_without_value",
   "fixable_gaps",
   "unclear_key_facts",
+  "document_conflict",
+  "deadline_passed",
   "clear",
 ] as const;
 export type RecommendationRule = (typeof RECOMMENDATION_RULES)[number];
@@ -39,6 +41,8 @@ export const RULE_TEXT: Record<RecommendationRule, string> = {
   severe_without_value: "Payment risk is Severe and no contract value is recorded",
   fixable_gaps: "Missing mandatory documents or gaps that can be fixed",
   unclear_key_facts: "Deadline, security or evaluation is blank or needs a person",
+  document_conflict: "Bid security amounts disagree, or an addendum conflicts with the main document",
+  deadline_passed: "Closing date has passed",
   clear: "No decline, blocker or clarification rule matched",
 };
 

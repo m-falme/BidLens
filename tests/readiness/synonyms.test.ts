@@ -68,15 +68,34 @@ describe("matching uses the synonym map", () => {
     });
   });
 
-  it("links a Don't have bid bond instead of calling the tender security a new document", () => {
+  it("links a Don't have bid bond from the evidence library", () => {
     const result = matchRequirements(
       [req(nairobiBond)],
-      [paper({ id: "bond", kind: "document", name: "Attach a bid bond of Kshs. 800,000.00", holding: "dont_have" })],
+      [paper({ id: "bond", kind: "document", name: "Bid bond", holding: "dont_have" })],
       "2026-11-13",
     );
-    expect(result.items[0]).toMatchObject({ match: "missing", unlisted: false, capabilityId: null, expired: false });
-    expect(result.items[0].rationale).toMatch(/bid bond/i);
+    expect(result.items[0]).toMatchObject({
+      match: "missing",
+      unlisted: false,
+      capabilityId: null,
+      capabilityName: "Bid bond",
+      expired: false,
+    });
     expect(result.items[0].rationale).toMatch(/Don't have/);
+  });
+
+  it("does not treat a tender requirement line as a company record", () => {
+    const line = "Attach a bid bond of Kshs 800,000";
+    const result = matchRequirements(
+      [req(line)],
+      [paper({ id: "bond", kind: "document", name: line, holding: "have" })],
+      "2026-11-13",
+    );
+    const item = result.items[0];
+    expect(item.capabilityName).not.toBe(line);
+    expect(item.capabilityId).toBeNull();
+    expect(item.rationale).not.toContain(line);
+    expect(item.evidenceRef ?? "").not.toContain("800,000");
   });
 
   it("does not let a service named bid bond satisfy tender security", () => {

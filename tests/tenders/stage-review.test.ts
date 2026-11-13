@@ -75,6 +75,9 @@ describe("step findings", () => {
     expect(interpretationFinding({ facts: 12, needsHuman: 2 })).toBe(
       "Found 12 facts. 2 still need a person to check.",
     );
+    expect(interpretationFinding({ facts: 12, needsHuman: 1 })).toBe(
+      "Found 12 facts. 1 still needs a person to check.",
+    );
   });
 
   it("summarises readiness counts", () => {

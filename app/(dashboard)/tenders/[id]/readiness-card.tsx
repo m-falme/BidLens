@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { readinessLabel, type ReadinessMatch, type ReadinessResult } from "@/lib/readiness/match";
+import { evidenceLibraryHref } from "@/lib/tenders/evidence-return";
 import { cn } from "@/lib/utils";
 
 import { AddDocumentButton } from "./add-document-button";
@@ -21,9 +22,11 @@ function Assessment({ match, selfDeclared }: { match: ReadinessMatch; selfDeclar
 }
 
 export function ReadinessCard({
+  tenderId,
   result,
   withdrawn,
 }: {
+  tenderId: string;
   result: ReadinessResult;
   /** Mandatory lines an addendum withdrew, so they are not counted as gaps. */
   withdrawn: readonly string[];
@@ -68,7 +71,7 @@ export function ReadinessCard({
                     {item.match === "met" && item.capabilityId && item.capabilityName ? (
                       <span className="flex flex-col gap-1">
                         <Link
-                          href={`/evidence#doc-${item.capabilityId}`}
+                          href={evidenceLibraryHref(tenderId, "compliance", item.capabilityId)}
                           className="font-medium text-brand underline-offset-4 hover:underline"
                         >
                           Met: you have {item.capabilityName}

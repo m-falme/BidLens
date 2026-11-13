@@ -61,6 +61,24 @@ export function countyScoreReason(input: {
   return "Not enough Controller of Budget data to score this county.";
 }
 
+/** The risk chip. The band is the unpaid-bills band, not a payment date. */
+export function riskChipLabel(band: RiskBand | null): string {
+  if (!band || band === "unknown") return "County payment risk: No score";
+  return `County payment risk: ${RISK_LABEL[band]}`;
+}
+
+/**
+ * "sixty (60)" names a count and leaves the unit off. Show the figure with the unit.
+ * A value that already carries a unit, or is not that pattern, is left as written.
+ */
+export function spelledCountWithUnit(value: string, unit: string): string {
+  const match = value.trim().match(/^[A-Za-z][A-Za-z\s-]*\((\d+)\)\.?$/);
+  if (!match) return value;
+  const count = Number(match[1]);
+  const word = count === 1 && unit.endsWith("s") ? unit.slice(0, -1) : unit;
+  return `${match[1]} ${word}`;
+}
+
 export function confidenceLabel(value: string | null): string {
   if (!value) return "Not scored";
   return CONFIDENCE_LABEL[value] ?? "Not scored";

@@ -78,7 +78,8 @@ export function interpretationFinding(input: { facts: number; needsHuman: number
   if (input.facts === 0) return "No key facts were extracted from this tender yet.";
   const facts = `Found ${input.facts} fact${input.facts === 1 ? "" : "s"}.`;
   if (input.needsHuman === 0) return facts;
-  return `${facts} ${input.needsHuman} still need a person to check.`;
+  const verb = input.needsHuman === 1 ? "needs" : "need";
+  return `${facts} ${input.needsHuman} still ${verb} a person to check.`;
 }
 
 export function complianceFinding(input: {

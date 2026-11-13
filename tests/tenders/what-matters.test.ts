@@ -77,7 +77,8 @@ describe("buildWhatMatters", () => {
     expect(points[1].text).toContain("Kshs. 800,000");
     expect(points[1].text).not.toContain("disagrees");
     expect(points[2].text).toContain("twenty percent (20%)");
-    expect(points[2].text).toContain("sixty (60)");
+    expect(points[2].text).toContain("60 days");
+    expect(points[2].text).not.toContain("sixty (60)");
     expect(points[3].text).toContain("Performance security is left blank");
     expect(points[4].text).toBe("1 extracted field needs a human to check.");
   });

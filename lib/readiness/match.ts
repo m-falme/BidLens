@@ -127,6 +127,18 @@ function tokens(value: string): string[] {
     .filter((token) => token.length > 2 && !STOP.has(token));
 }
 
+/**
+ * A company record is a title from the evidence library.
+ * A tender sentence (an instruction, or a line that states a shilling amount) is not one.
+ */
+const TENDER_REQUIREMENT_LINE =
+  /\b(?:kshs?\.?|kes|kenya shillings)\b|\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b|^(?:\d+[\).\s]+)?(?:attach|must submit|must provide|shall submit|shall provide|submit a|provide certified)\b/i;
+
+export function isCompanyRecordName(name: string): boolean {
+  const text = name.replace(/\s+/g, " ").trim();
+  return text.length > 0 && !TENDER_REQUIREMENT_LINE.test(text);
+}
+
 function phraseIn(haystack: string, name: string): boolean {
   const needle = name.toLowerCase().replace(/\s+/g, " ").trim();
   return needle.length >= 8 && haystack.toLowerCase().includes(needle);
@@ -432,11 +444,12 @@ export function matchRequirements(
   companyName?: string | null,
 ): ReadinessResult {
   const voice = companyVoice(companyName);
-  const known = new Set(capabilities.map((capability) => capability.id));
+  const library = capabilities.filter((capability) => isCompanyRecordName(capability.name));
+  const known = new Set(library.map((capability) => capability.id));
   const items = requirements.map((requirement) => {
-    const item = matchOne(requirement, capabilities, asOf, voice);
+    const item = matchOne(requirement, library, asOf, voice);
     if (item.match !== "met") return item;
-    const capability = capabilities.find((candidate) => candidate.id === item.capabilityId);
+    const capability = library.find((candidate) => candidate.id === item.capabilityId);
     const proofLine = HELD_PROOF.test(requirement.text) || EXPERIENCE.test(requirement.text) || paperLine(requirement.text);
     const wrongKind = proofLine && capability !== undefined && !PROOF_KINDS.has(capability.kind);
     const notHeld = capability !== undefined && !isHeld(capability, asOf);

@@ -6,6 +6,7 @@ import { ExternalLink } from "lucide-react";
 import { StatusBadge } from "@/components/evidence/status-badge";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { FieldStatus, SourceRole } from "@/lib/db/vocab";
+import { spelledCountWithUnit } from "@/lib/format/display";
 import type { AddendumConflict } from "@/lib/tenders/addendum-conflicts";
 import type { BidSecurityConflict } from "@/lib/tenders/document-conflicts";
 import { fieldLabel } from "@/lib/tenders/field-catalog";
@@ -35,8 +36,13 @@ export interface ViewSource {
   fileUrl: string | null;
 }
 
+function shownValue(field: ViewField): string {
+  if (field.key === "payment_days" && field.value) return spelledCountWithUnit(field.value, "days");
+  return field.value ?? "";
+}
+
 function ValueText({ field }: { field: ViewField }) {
-  if (field.value !== null) return <span className="whitespace-pre-line">{field.value}</span>;
+  if (field.value !== null) return <span className="whitespace-pre-line">{shownValue(field)}</span>;
   if (field.status === "blank_in_source") return <span className="text-muted-foreground italic">Left blank in the tender</span>;
   if (field.extractionFailed) return <span className="text-muted-foreground italic">Extraction failed: check the document</span>;
   return <span className="text-muted-foreground italic">Not found in the pages searched</span>;

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 
+import { ClosedBadge } from "@/components/tenders/markers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,17 +13,19 @@ import {
   RECOMMENDATION_LABELS,
   type RecommendationLabel,
 } from "@/lib/recommendation/labels";
+import { evidenceLibraryHref } from "@/lib/tenders/evidence-return";
 import {
   WORKSPACE_TABS,
   approveToast,
   hashForTab,
   nextTab,
   preparationToast,
-  reviewPill,
   reviewStageForTab,
   reviewStageNumber,
+  stageHeading,
   stageMark,
   tabFromHash,
+  tabFromStage,
   type WorkspaceApproval,
   type WorkspaceTabId,
 } from "@/lib/tenders/workspace-stages";
@@ -54,10 +57,14 @@ function hashSnapshot() {
 
 export function TenderWorkspace({
   tenderId,
+  requestedStage,
   title,
   buyer,
   reference,
   closing,
+  closed,
+  decisionLabel,
+  needsHumanReview,
   addendumHref,
   approval,
   heads,
@@ -71,10 +78,17 @@ export function TenderWorkspace({
   preparation,
 }: {
   tenderId: string;
+  /** `?stage=` from the tender URL. Opens that stage when it names one. */
+  requestedStage?: string | null;
   title: string;
   buyer: string;
   reference: string;
   closing: string;
+  closed: boolean;
+  /** The saved decision label, once a bid decision exists. */
+  decisionLabel: string | null;
+  /** No source-confirmed facts, or no mandatory requirements. Approve stays off. */
+  needsHumanReview: boolean;
   addendumHref: string;
   approval: WorkspaceApproval;
   heads: Record<WorkspaceTabId, { title: string; summary: string }>;
@@ -89,7 +103,12 @@ export function TenderWorkspace({
 }) {
   const router = useRouter();
   const hash = useSyncExternalStore(subscribeHash, hashSnapshot, () => "");
-  const active = tabFromHash(hash) ?? WORKSPACE_TABS[reviewStageNumber(approval) - 1]?.id ?? "interpretation";
+  const fromQuery = tabFromStage(requestedStage);
+  const active =
+    fromQuery ??
+    tabFromHash(hash) ??
+    WORKSPACE_TABS[reviewStageNumber(approval) - 1]?.id ??
+    "interpretation";
   const [name, setName] = useState(DEFAULT_REVIEWER);
   const [note, setNote] = useState("");
   const [noteStage, setNoteStage] = useState<WorkspaceTabId>("commercial");
@@ -152,12 +171,25 @@ export function TenderWorkspace({
 
   function select(id: WorkspaceTabId) {
     setError(null);
-    const next = `#${hashForTab(id)}`;
-    if (window.location.hash !== next) {
-      window.history.replaceState(null, "", next);
-    }
+    const url = new URL(window.location.href);
+    url.searchParams.set("stage", id);
+    url.hash = hashForTab(id);
+    const next = `${url.pathname}${url.search}${url.hash}`;
+    const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (current !== next) router.push(next, { scroll: false });
     notifyHash();
   }
+
+  useEffect(() => {
+    if (fromQuery) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("stage", active);
+    url.hash = hashForTab(active);
+    const next = `${url.pathname}${url.search}${url.hash}`;
+    const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (current === next) return;
+    router.replace(next, { scroll: false });
+  }, [active, fromQuery, router]);
 
   function saveNote() {
     setModalError(null);
@@ -245,11 +277,12 @@ export function TenderWorkspace({
     });
   }
 
-  const evidenceHref = active === "interpretation" ? addendumHref : "/evidence";
+  const evidenceHref = active === "interpretation" ? addendumHref : evidenceLibraryHref(tenderId, active);
   const choices = RECOMMENDATION_LABELS.filter((label) => label !== recommendedLabel);
   const noteOnThisStage = reviewStageForTab(active) !== null;
-  const footNote =
-    active === "recommendation"
+  const footNote = needsHumanReview
+    ? "Needs human review"
+    : active === "recommendation"
       ? "A person approves or overrides this recommendation. Nothing is submitted."
       : active === "preparation"
         ? preparationToast(planDone, planTotal)
@@ -258,9 +291,9 @@ export function TenderWorkspace({
   return (
     <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-[0_8px_28px_rgba(23,32,42,0.05)]">
       <div className="px-5 py-4">
-        <p className="inline-flex items-center gap-2 text-sm font-semibold tracking-wide text-confirmed uppercase">
+        <p className="inline-flex items-center gap-2 text-sm font-semibold tracking-wide text-confirmed">
           <span className="size-2 rounded-full bg-confirmed" aria-hidden />
-          {reviewPill(approval)}
+          {stageHeading(active, decisionLabel)}
         </p>
         <h2 className="font-heading mt-2 text-2xl tracking-tight break-words">{title}</h2>
         <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
@@ -270,8 +303,9 @@ export function TenderWorkspace({
           <div>
             Ref <span className="font-semibold text-foreground">{reference}</span>
           </div>
-          <div>
+          <div className="flex items-center gap-2">
             Closing <span className="font-semibold text-foreground">{closing}</span>
+            {closed && <ClosedBadge />}
           </div>
         </dl>
       </div>
@@ -404,12 +438,12 @@ export function TenderWorkspace({
                 <Button type="button" variant="outline" disabled={pending} onClick={saveOverride}>
                   {pending ? "Saving…" : "Override with reason"}
                 </Button>
-                <Button type="button" disabled={pending} onClick={approveReview}>
+                <Button type="button" disabled={pending || needsHumanReview} onClick={approveReview}>
                   {pending ? "Saving…" : "Approve"}
                 </Button>
               </>
             ) : (
-              <Button type="button" disabled={pending} onClick={approveReview}>
+              <Button type="button" disabled={pending || needsHumanReview} onClick={approveReview}>
                 {pending ? "Saving…" : active === "preparation" ? "Bid preparation reviewed" : "Approve stage →"}
               </Button>
             )}

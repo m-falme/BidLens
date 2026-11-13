@@ -37,3 +37,11 @@ export function summarizeReview(
 
   return { total: fields.length, byStatus, conflicts, needsReview: byStatus.needs_human + conflicts.length };
 }
+
+/**
+ * An empty tender cannot be approved. No source-confirmed fact, or no mandatory
+ * requirement, means a person has to look before any stage is approved.
+ */
+export function needsHumanReview(input: { sourceConfirmed: number; mandatoryRequirements: number }): boolean {
+  return input.sourceConfirmed === 0 || input.mandatoryRequirements === 0;
+}

@@ -46,6 +46,15 @@ export function reviewPill(approval: WorkspaceApproval): string {
   return `IN REVIEW · STAGE ${reviewStageNumber(approval)} OF ${WORKSPACE_TABS.length}`;
 }
 
+/** The open tab, or the recorded decision once a bid decision exists. */
+export function stageHeading(tab: WorkspaceTabId, decisionLabel: string | null): string {
+  if (decisionLabel) return `Decided: ${decisionLabel}`;
+  const index = WORKSPACE_TABS.findIndex((item) => item.id === tab);
+  const current = WORKSPACE_TABS[index] ?? WORKSPACE_TABS[0];
+  const number = index === -1 ? 1 : index + 1;
+  return `Stage ${number} of ${WORKSPACE_TABS.length} · ${current.label}`;
+}
+
 export type StageMark = "done" | "current" | "waiting";
 
 /** Done when approved. Current is the first tab that is not. The rest are waiting. */
@@ -60,6 +69,17 @@ export function tabFromHash(hash: string): WorkspaceTabId | null {
   return WORKSPACE_TABS.find((tab) => tab.hash === bare)?.id ?? null;
 }
 
+/** `?stage=` on a tender. Accepts the tab id, the old hash, or the stage name. */
+export function tabFromStage(value: string | null | undefined): WorkspaceTabId | null {
+  if (!value) return null;
+  const bare = value.trim().replace(/^#/, "");
+  if (!bare || bare.length > 40) return null;
+  const exact = WORKSPACE_TABS.find((tab) => tab.id === bare || tab.hash === bare);
+  if (exact) return exact.id;
+  const lower = bare.toLowerCase();
+  return WORKSPACE_TABS.find((tab) => tab.label.toLowerCase() === lower)?.id ?? null;
+}
+
 export function hashForTab(id: WorkspaceTabId): string {
   const tab = WORKSPACE_TABS.find((item) => item.id === id);
   return tab?.hash ?? "can_bid";
@@ -68,6 +88,12 @@ export function hashForTab(id: WorkspaceTabId): string {
 export function nextTab(id: WorkspaceTabId): WorkspaceTabId | null {
   const index = WORKSPACE_TABS.findIndex((tab) => tab.id === id);
   return WORKSPACE_TABS[index + 1]?.id ?? null;
+}
+
+export function previousTab(id: WorkspaceTabId): WorkspaceTabId | null {
+  const index = WORKSPACE_TABS.findIndex((tab) => tab.id === id);
+  if (index <= 0) return null;
+  return WORKSPACE_TABS[index - 1]?.id ?? null;
 }
 
 export function reviewStageForTab(id: WorkspaceTabId): ReviewStage | null {
@@ -88,6 +114,7 @@ export function approveToast(id: WorkspaceTabId): string {
 
 /** Bid preparation does not write a stage. The toast is the plan progress. */
 export function preparationToast(done: number, total: number): string {
-  if (total === 0 || done === total) return "Bid preparation reviewed";
-  return `${done} of ${total} done`;
+  const missing = total - done;
+  if (total === 0 || missing === 0) return "Bid preparation reviewed";
+  return `${done} of ${total} · ${missing} missing`;
 }

@@ -1,6 +1,6 @@
 import { documentIsExpired } from "@/lib/company/papers";
 import { sentenceCase } from "@/lib/format/display";
-import { daysUntilDeadline } from "@/lib/recommendation/deadline";
+import { closingHasPassed, daysUntilDeadline } from "@/lib/recommendation/deadline";
 import { RECOMMENDATION_LABEL, type RecommendationLabel } from "@/lib/recommendation/labels";
 import type { ReviewStage } from "@/lib/tenders/stage-review";
 
@@ -41,6 +41,20 @@ export interface OverviewTender {
   finalLabel: RecommendationLabel | null;
   /** Stages that have at least one saved review. */
   reviewedStages: readonly ReviewStage[];
+}
+
+/** Uploaded tenders whose closing date is still today or ahead. A past date is not active. */
+export function activeTenderStats(
+  tenders: readonly OverviewTender[],
+  asOf: Date,
+): { total: number; unreviewed: number } {
+  const open = tenders.filter(
+    (tender) => !closingHasPassed({ closingText: tender.closing, deadlineAt: tender.deadlineAt, asOf }),
+  );
+  return {
+    total: open.length,
+    unreviewed: open.filter((tender) => tender.reviewedStages.length === 0).length,
+  };
 }
 
 export function activeReviewNote(unreviewed: number, total: number): string {

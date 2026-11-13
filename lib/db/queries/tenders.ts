@@ -32,11 +32,11 @@ function fail(context: string, error: { message: string } | null): never {
   throw new Error(`${context}: ${error?.message ?? "unknown error"}`);
 }
 
-export async function getDemoCompanyId(): Promise<string> {
+export const getDemoCompanyId = cache(async function getDemoCompanyId(): Promise<string> {
   const { data, error } = await getServiceClient().from("companies").select("id").eq("name", DEMO_COMPANY_NAME).single();
   if (error || !data) fail(`company "${DEMO_COMPANY_NAME}" was not found`, error);
   return data.id;
-}
+});
 
 // ---------------------------------------------------------------------------
 // Reads
@@ -404,6 +404,12 @@ export async function findSourceBySha256(sha256: string) {
     .maybeSingle();
   if (error) fail("check duplicate upload", error);
   return data;
+}
+
+export async function opportunityExists(id: string): Promise<boolean> {
+  const { data, error } = await getServiceClient().from("opportunities").select("id").eq("id", id).maybeSingle();
+  if (error) fail("load tender", error);
+  return data !== null;
 }
 
 export async function getOpportunityForAddendum(opportunityId: string) {

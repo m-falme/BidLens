@@ -76,7 +76,7 @@ export function TrailList({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search decisions, names and notes…"
-          className="h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 sm:max-w-sm"
+          className="h-10 w-full min-w-0 flex-1 rounded-lg border border-input bg-background px-3 outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:min-w-64 sm:max-w-sm"
         />
         <label htmlFor={`${id}-t`} className="sr-only">
           Tender
@@ -85,7 +85,7 @@ export function TrailList({
           id={`${id}-t`}
           value={tender}
           onChange={(event) => setTender(event.target.value)}
-          className="h-10 max-w-full min-w-0 rounded-lg border border-input bg-background px-3 sm:max-w-md"
+          className="h-10 w-full shrink-0 rounded-lg border border-input bg-background px-3 outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-72"
         >
           <option value="all">All tenders</option>
           {tenders.map((item) => (

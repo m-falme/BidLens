@@ -212,7 +212,7 @@ function ActionRow({ tenderId, row }: { tenderId: string; row: PlanRow }) {
         </div>
       </div>
       {error && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-blocker">
           {error}
         </p>
       )}
@@ -242,7 +242,7 @@ function CopyQuestions({ questions }: { questions: readonly string[] }) {
         {copied ? "Copied" : "Copy all questions"}
       </Button>
       {error && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-blocker">
           {error}
         </p>
       )}

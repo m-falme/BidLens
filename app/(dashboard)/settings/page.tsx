@@ -87,7 +87,7 @@ export default function SettingsPage() {
                   <p className="font-medium">{gate.title}</p>
                   <p className="text-sm text-muted-foreground">{gate.detail}</p>
                 </div>
-                <span className="h-fit rounded-full bg-confirmed/10 px-2.5 py-0.5 text-sm font-medium text-confirmed">
+                <span className="h-fit shrink-0 rounded-full bg-confirmed/10 px-2.5 py-0.5 text-sm font-medium text-confirmed">
                   On
                 </span>
               </li>

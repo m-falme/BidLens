@@ -52,7 +52,11 @@ function ConflictPill() {
 
 function PageLink({ pageNo, onClick }: { pageNo: number | null; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="font-medium text-brand not-italic hover:underline">
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-sm font-medium text-brand not-italic hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+    >
       {pageNo ? `Page ${pageNo}` : "No page"} ↗
     </button>
   );

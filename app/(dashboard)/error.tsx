@@ -6,7 +6,7 @@ import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default function DashboardError({ error, retry }: { error: unknown; retry: () => void }) {
+export default function DashboardError({ error, reset }: { error: unknown; reset: () => void }) {
   useEffect(() => {
     console.error(error);
   }, [error]);
@@ -26,7 +26,7 @@ export default function DashboardError({ error, retry }: { error: unknown; retry
           </CardDescription>
         </CardHeader>
         <CardContent className="flex items-center gap-4">
-          <Button onClick={() => retry()}>Try again</Button>
+          <Button onClick={() => reset()}>Try again</Button>
           {digest && <span className="text-sm text-muted-foreground">Reference: {digest}</span>}
         </CardContent>
       </Card>

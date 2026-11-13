@@ -139,7 +139,7 @@ export function UploadForm({
               id={`${inputId}-tender`}
               value={opportunityId}
               onChange={(e) => setOpportunityId(e.target.value)}
-              className="h-10 w-full min-w-0 rounded-lg border border-input bg-background px-3"
+              className="h-10 w-full min-w-0 rounded-lg border border-input bg-background px-3 outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               {targets.map((t) => {
                 const label = `${t.reference ? `${t.reference} · ` : ""}${t.title}`;

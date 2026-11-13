@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { saveBidDecisionAction, saveStageReview } from "./actions";
 
 const DEFAULT_REVIEWER = "Bid manager";
+const FOCUS_RING = "focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 
 const hashListeners = new Set<() => void>();
 
@@ -100,6 +101,7 @@ export function TenderWorkspace({
   const [reason, setReason] = useState("");
   const [pending, startTransition] = useTransition();
   const noteRef = useRef<HTMLTextAreaElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const nameId = useId();
   const noteId = useId();
@@ -122,7 +124,27 @@ export function TenderWorkspace({
     if (!modalOpen) return;
     noteRef.current?.focus();
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setModalOpen(false);
+      if (event.key === "Escape") {
+        setModalOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const items = [...dialog.querySelectorAll<HTMLElement>("button, input, select, textarea")].filter(
+        (el) => !el.hasAttribute("disabled"),
+      );
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !dialog.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+        event.preventDefault();
+        first.focus();
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -240,7 +262,7 @@ export function TenderWorkspace({
           <span className="size-2 rounded-full bg-confirmed" aria-hidden />
           {reviewPill(approval)}
         </p>
-        <h2 className="font-heading mt-2 text-2xl tracking-tight">{title}</h2>
+        <h2 className="font-heading mt-2 text-2xl tracking-tight break-words">{title}</h2>
         <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
           <div>
             Buyer <span className="font-semibold text-foreground">{buyer}</span>
@@ -254,7 +276,7 @@ export function TenderWorkspace({
         </dl>
       </div>
 
-      <div className="flex items-center gap-1 overflow-x-auto border-y border-border px-4 py-3" aria-label="Stage progress">
+      <div className="flex min-w-0 items-center gap-1 overflow-x-auto border-y border-border px-4 py-3" aria-label="Stage progress">
         {WORKSPACE_TABS.map((tab, index) => {
           const mark = stageMark(tab.id, approval);
           return (
@@ -265,6 +287,7 @@ export function TenderWorkspace({
                 onClick={() => select(tab.id)}
                 className={cn(
                   "flex min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left text-sm",
+                  FOCUS_RING,
                   mark === "done" && "text-confirmed",
                   mark === "current" && "font-semibold text-foreground",
                   mark === "waiting" && "text-muted-foreground",
@@ -289,7 +312,7 @@ export function TenderWorkspace({
         })}
       </div>
 
-      <div role="tablist" aria-label="Review stages" className="flex gap-1 overflow-x-auto border-b border-border px-3 py-2">
+      <div role="tablist" aria-label="Review stages" className="flex min-w-0 flex-wrap gap-1 border-b border-border px-3 py-2">
         {WORKSPACE_TABS.map((tab) => (
           <button
             key={tab.id}
@@ -301,6 +324,7 @@ export function TenderWorkspace({
             onClick={() => select(tab.id)}
             className={cn(
               "rounded-md px-3 py-2 text-sm whitespace-nowrap",
+              FOCUS_RING,
               active === tab.id ? "bg-confirmed/10 font-semibold text-confirmed" : "text-muted-foreground hover:bg-muted",
             )}
           >
@@ -405,6 +429,7 @@ export function TenderWorkspace({
           onClick={() => setModalOpen(false)}
         >
           <div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}

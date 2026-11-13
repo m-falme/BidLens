@@ -2,7 +2,7 @@
 > Cursor: update this at the end of every step. Keep it under ~60 lines. Newest first in "Log".
 
 ## Status
-- **Current step:** Step 9c committed. Remaining pages are in. The senior pre-release review (click-through, backend checks, uncommitted polish) has not started.
+- **Current step:** Step 9d polish is uncommitted on `main` (9c is `8dabd69`, not pushed). Click-through is done. Lint, typecheck, 188 tests and the build passed.
 - **Deployed URL:** —
 - **Repo:** https://github.com/m-falme/BidLens, branch `main`
 - **Gate:** Thu 12 Nov 2026 · assessment 14:00–15:30 EAT · cut 16:00
@@ -57,12 +57,14 @@
 - 2026-11-12 (step 3 live): Listed models with the key. `gemini-2.5-flash` is closed to new users. `gemini-3.6-flash` accepts `additionalProperties: false` but the free tier is 20 requests/day and was used up probing. Live model is `gemini-3.5-flash-lite` (thinkingLevel `minimal`; 3.7/3.8 reject `minimal`). Gemini rejects `maxItems` on our array schema, so the 60-item cap is applied after the answer. SDK `maxRetries: 0`; one extra retry on a demand error. Link-styled buttons set `nativeButton={false}`.
 
 ## Next
-- Senior pre-release review. Click the whole journey, then small safe fixes only. Do not change core logic, data, rules or the maths. Do not commit or push those polish edits. Leave them staged-ready and give the commit and push commands.
-- Deploy the public link if it is still missing. Supabase CLI needs `--remote`.
-- Deploy the public link if it is still missing. Supabase CLI needs `--remote`.
+- Commit and push step 9d, then deploy the public link. Supabase CLI needs `--remote`. Vercel env must be the project URL with no path.
 - Human correction of an extracted field (keep `original_value`) is still not built. Quote check already runs in extraction.
+- Before the demo, decide whether to keep the Nyamira advert tender (upload check, extraction failed on a scan) and Makueni's recorded reviews and decision.
 
 ## Known issues / open questions
+- Live data from the 13 Nov review: Makueni has Interpretation reviewed (empty note), Compliance reviewed (note about the company list), an approved Resolve blockers decision, and 1 of 20 plan items done. Nairobi has no reviews or decisions. A third tender, `4a6d7a39-7a24-45ba-b5dc-bf855f5eac67`, is the Nyamira advert; both pages are scans, so extraction stopped before any model call.
+- A bad tender id inside the page shows "Tender not found" with HTTP 200, because `notFound()` sits under the layout Suspense. A missing id on the extract route returns 404.
+- Approve and Override share one saving state, so both labels change together. The stage progress row still scrolls sideways on a narrow desktop.
 - Free-tier Gemini: `gemini-3.6-flash` is 20 requests/day (exhausted while choosing a model). Live calls use `gemini-3.5-flash-lite`. A demand spike retries once.
 - Field inserts are chunked (200) without a transaction; a mid-insert failure could leave partial fields on a failed run (runs are ~<200 fields, so one chunk in practice).
 - Scanned PDFs (e.g. Nyamira advert, 0 text): run fails with a clear "no text layer, OCR not available" message. OCR is a later step.
@@ -76,6 +78,7 @@
 - npm held back esbuild's postinstall (allowScripts); tsx works regardless.
 
 ## Log
+- 2026-11-13 04:15 — Step 9d, not committed. Clicked Overview, Tenders, Leads, both uploaded tenders, Evidence, trail, Settings, company, upload and a phone width. Fixed the page overflowing beside the sidebar, the error-page retry, trail search width, long file names, focus rings, and a phone-width sidebar hydration mismatch. Failed extraction text no longer shows a provider message. Lint, typecheck, 188 tests and the build passed.
 - 2026-11-13 03:45 — Step 9c: tender tabs, company profile, evidence library, decision trail, settings, upload restyle. `/leads` redirects. 188 tests before the empty-trail footer tweak. Checked in the browser: company (74 capabilities), evidence (13 documents), empty trail, settings, leads tab, add tender.
 - 2026-11-13 02:40 — Step 9b: five-stage tender workspace, review footer, delay table, proposals redirect. Checked on Nairobi: pill stage 1 of 5, compliance table, commercial table with the Severe row highlighted, then the test figures were cleared. Ask / correct opens. `/proposals` lands on `/tenders`.
 - 2026-11-13 02:05 — Step 9a: cream theme, serif headings, sidebar (Workspace / Manage), top bar crumb, Overview from live counts. 179 tests. Tender workspace not restyled.

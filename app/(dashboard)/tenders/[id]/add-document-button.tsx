@@ -32,7 +32,7 @@ export function AddDocumentButton({ requirement }: { requirement: string }) {
       >
         {pending ? "Adding…" : "Add to my documents"}
       </button>
-      {error && <span className="text-sm text-red-700">{error}</span>}
+      {error && <span className="text-sm text-blocker">{error}</span>}
     </span>
   );
 }

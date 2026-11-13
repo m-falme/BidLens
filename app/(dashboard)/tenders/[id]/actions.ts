@@ -13,6 +13,12 @@ import { parseStageReview } from "@/lib/tenders/stage-review";
 
 export type StageReviewActionResult = { ok: true } | { ok: false; error: string };
 
+function actionError(error: unknown, fallback: string): string {
+  console.error(fallback, error);
+  if (error instanceof Error && error.message === "That tender was not found.") return error.message;
+  return fallback;
+}
+
 export async function saveStageReview(input: unknown): Promise<StageReviewActionResult> {
   const parsed = parseStageReview(input);
   if (!parsed.ok) return parsed;
@@ -21,10 +27,10 @@ export async function saveStageReview(input: unknown): Promise<StageReviewAction
     revalidatePath(`/tenders/${parsed.value.tenderId}`);
     revalidatePath("/tenders");
     revalidatePath("/");
+    revalidatePath("/trail");
     return { ok: true };
   } catch (error) {
-    console.error("save stage review", error);
-    return { ok: false, error: "The review could not be saved. Please try again." };
+    return { ok: false, error: actionError(error, "The review could not be saved. Please try again.") };
   }
 }
 
@@ -36,8 +42,7 @@ export async function saveTenderFiguresAction(input: unknown): Promise<StageRevi
     revalidatePath(`/tenders/${parsed.value.tenderId}`);
     return { ok: true };
   } catch (error) {
-    console.error("save tender figures", error);
-    return { ok: false, error: "The figures could not be saved. Please try again." };
+    return { ok: false, error: actionError(error, "The figures could not be saved. Please try again.") };
   }
 }
 
@@ -49,10 +54,10 @@ export async function saveBidDecisionAction(input: unknown): Promise<StageReview
     revalidatePath(`/tenders/${parsed.value.tenderId}`);
     revalidatePath("/tenders");
     revalidatePath("/");
+    revalidatePath("/trail");
     return { ok: true };
   } catch (error) {
-    console.error("save bid decision", error);
-    return { ok: false, error: "The decision could not be saved. Please try again." };
+    return { ok: false, error: actionError(error, "The decision could not be saved. Please try again.") };
   }
 }
 
@@ -65,7 +70,6 @@ export async function saveActionItem(input: unknown): Promise<StageReviewActionR
     revalidatePath(`/tenders/${parsed.value.tenderId}/plan`);
     return { ok: true };
   } catch (error) {
-    console.error("save action item", error);
-    return { ok: false, error: "The plan item could not be saved. Please try again." };
+    return { ok: false, error: actionError(error, "The plan item could not be saved. Please try again.") };
   }
 }

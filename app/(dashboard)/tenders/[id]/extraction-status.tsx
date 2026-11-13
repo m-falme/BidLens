@@ -22,6 +22,14 @@ export interface SourceStatus {
   } | null;
 }
 
+/** Stored run errors can name a provider. The screen keeps only the messages written for a person. */
+function runErrorText(error: string | null): string {
+  if (!error) return "Analysis did not finish.";
+  if (error.startsWith("This PDF has no text layer")) return error;
+  if (error.startsWith("Timed out:")) return "Analysis took too long and was stopped. Nothing new was saved.";
+  return "Analysis did not finish. Nothing new was saved for this document.";
+}
+
 export function ExtractionStatus({ opportunityId, sources }: { opportunityId: string; sources: SourceStatus[] }) {
   const router = useRouter();
   const [requesting, setRequesting] = useState(false);
@@ -92,9 +100,9 @@ export function ExtractionStatus({ opportunityId, sources }: { opportunityId: st
       )}
       <ul className="flex flex-col divide-y rounded-lg border">
         {sources.map((s) => (
-          <li key={s.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
-            <FileText className="size-4 text-muted-foreground" aria-hidden />
-            <span className="font-medium">{s.name}</span>
+          <li key={s.id} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
+            <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="min-w-0 font-medium break-all">{s.name}</span>
             <span className="text-sm text-muted-foreground">
               {s.role === "addendum" ? "Addendum" : "Main document"} · {s.pages} pages
               {s.needsOcrPages.length > 0 &&
@@ -116,7 +124,7 @@ export function ExtractionStatus({ opportunityId, sources }: { opportunityId: st
                 </span>
               )}
               {s.run?.status === "failed" && (
-                <span className="text-destructive">Failed: {s.run.error ?? "unknown error"}</span>
+                <span className="max-w-full text-destructive break-words">{runErrorText(s.run.error)}</span>
               )}
             </span>
           </li>

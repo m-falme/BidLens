@@ -323,7 +323,7 @@ async function TenderDetail({ params }: { params: PageProps<"/tenders/[id]">["pa
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0 space-y-1">
           <p className="text-sm font-semibold tracking-[0.14em] text-brand uppercase">Tender workspace</p>
-          <h1 className="font-heading line-clamp-2 text-3xl tracking-tight" title={displayTitle}>
+          <h1 className="font-heading line-clamp-2 text-3xl tracking-tight break-words" title={displayTitle}>
             {heading}
           </h1>
           <p className="max-w-2xl text-muted-foreground">

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { opportunityExists } from "@/lib/db/queries/tenders";
 import { EnvValidationError } from "@/lib/env/schema";
 import { runTenderExtraction } from "@/lib/tenders/run-extraction";
 
@@ -9,7 +10,7 @@ export const maxDuration = 300;
 
 export async function POST(_request: Request, ctx: RouteContext<"/api/tenders/[id]/extract">) {
   const { id } = await ctx.params;
-  if (!z.uuid().safeParse(id).success) {
+  if (!z.uuid().safeParse(id).success || !(await opportunityExists(id))) {
     return NextResponse.json({ error: "Unknown tender." }, { status: 404 });
   }
   try {

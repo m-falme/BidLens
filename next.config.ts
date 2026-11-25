@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
   agentRules: false,
   cacheComponents: true,
   partialPrefetching: true,
+  // The Find agent reads this file at runtime (SampleTenderSource); make sure the deploy ships it.
+  outputFileTracingIncludes: { "/find": ["./data/sample-tenders/tenders.json"] },
   turbopack: {
     rules: {
       "*.css": {

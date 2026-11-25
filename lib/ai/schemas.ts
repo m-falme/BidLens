@@ -65,3 +65,15 @@ export function groupOutputSchema(group: FieldGroup) {
 
 /** Parsed group output: each key maps to one item (scalar groups) or a list (list groups). */
 export type GroupOutput = Record<string, EvidenceItem | Array<EvidenceItem | AddendumChangeItem>>;
+
+/** The Find agent's batched answer: a fit score and plain reasons for each tender it was shown. */
+export const findFitOutputSchema = z.object({
+  results: z.array(
+    z.object({
+      id: z.string().describe("The tender id exactly as given."),
+      fit: z.number().min(0).max(100).describe("0 to 100: how well the tender suits the company."),
+      reasons: z.array(z.string().min(1).max(160)).min(1).max(3).describe("2 or 3 short plain-language reasons."),
+    }),
+  ),
+});
+export type FindFitOutput = z.infer<typeof findFitOutputSchema>;

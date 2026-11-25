@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { listFieldLeads, listTenders, type FieldLeadListItem, type TenderListItem } from "@/lib/db/queries/tenders";
 import { sentenceCase } from "@/lib/format/display";
 import { loadPlanStates } from "@/lib/plan/progress";
+import { groupTendersByClosing } from "@/lib/tenders/order";
 import type { PlanState } from "@/lib/plan/state";
 import { closingHasPassed } from "@/lib/recommendation/deadline";
 import { presentLeadCopy } from "@/lib/leads/public-names";
@@ -162,12 +163,18 @@ async function TenderTabs({ searchParams }: { searchParams: PageProps<"/tenders"
 
       {tab === "tenders" ? (
         <section className={CARD_CLASS}>
-          <TenderRows
-            items={uploaded}
-            asOf={asOf}
-            plans={plans}
-            empty="No tenders uploaded yet. Add a tender PDF to start."
-          />
+          {uploaded.length === 0 ? (
+            <TenderRows items={[]} asOf={asOf} empty="No tenders uploaded yet. Add a tender PDF to start." />
+          ) : (
+            groupTendersByClosing(uploaded, asOf).map((group) => (
+              <div key={group.id}>
+                <h2 className="border-t border-border/80 px-5 pt-4 pb-1 text-sm font-semibold tracking-[0.1em] text-muted-foreground uppercase first:border-t-0">
+                  {group.title} <span className="font-normal tabular-nums">({group.items.length})</span>
+                </h2>
+                <TenderRows items={group.items} asOf={asOf} plans={plans} empty="" />
+              </div>
+            ))
+          )}
         </section>
       ) : (
         <div className="flex flex-col gap-4">

@@ -4,7 +4,7 @@ import { cache } from "react";
 
 import { currentFiles } from "@/lib/company/files";
 import { sameName, TEAM_EVIDENCE_REF, type ProfileKind } from "@/lib/company/profile";
-import { COMPANY_PAPERS, documentNameFromRequirement, type DocumentHolding, type PaperGroup } from "@/lib/company/papers";
+import { ADDED_FROM_TENDER_REF, COMPANY_PAPERS, documentNameFromRequirement, type DocumentHolding, type PaperGroup } from "@/lib/company/papers";
 import { DOCUMENT_HOLDINGS } from "@/lib/db/vocab";
 
 import { getServiceClient, EVIDENCE_BUCKET } from "../supabase-server";
@@ -257,7 +257,7 @@ export async function insertOtherDocument(requirement: string): Promise<void> {
     kind: "document",
     name,
     detail: requirement.replace(/\s+/g, " ").trim(),
-    evidence_ref: "Added from a tender requirement",
+    evidence_ref: ADDED_FROM_TENDER_REF,
     verified: false,
     holding: "dont_have",
     expires_on: null,

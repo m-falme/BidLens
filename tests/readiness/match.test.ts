@@ -383,3 +383,71 @@ describe("a service the team added on the Company profile page", () => {
     expect(item.match).toBe("missing");
   });
 });
+
+describe("a bid bond counts only for its own tender and its own amount", () => {
+  const kijaniLine = "Bid security of KSh 250,000 in a valid bank guarantee.";
+  const nairobiLine = "5. Must submit a Tender Security of Kenya Shillings 500,000 issued by a licensed bank.";
+  const makueniLine = "13. Attach a bid bond of Kshs. 800,000.00 from a CBK-licensed bank.";
+  const line = (text: string) => ({ text, pageNo: 2, quote: text, category: "mandatory" as const });
+  const addedFor = (text: string, holding: "have" | "dont_have", id: string): ProfileCapability => ({
+    id,
+    kind: "document",
+    name: text,
+    detail: text,
+    evidenceRef: "Added from a tender requirement",
+    holding,
+    selfDeclared: true,
+    expiresOn: null,
+    neverExpires: false,
+  });
+
+  it("meets its own line once marked Have, shown as a claim under a clean label, never as the sentence", () => {
+    const [own] = matchRequirements([line(kijaniLine)], [addedFor(kijaniLine, "have", "k")]).items;
+    expect(own).toMatchObject({ match: "met", capabilityId: "k", selfDeclared: true, unlisted: false });
+    expect(readinessLabel(own)).toBe("Claimed, not verified");
+    expect(own.capabilityName).toBe("Bid security (added for this tender)");
+    expect(own.rationale).not.toContain("250,000");
+  });
+
+  it("is a gap while its own paper is Don't have", () => {
+    const [own] = matchRequirements([line(kijaniLine)], [addedFor(kijaniLine, "dont_have", "k")]).items;
+    expect(own).toMatchObject({ match: "missing", capabilityId: null });
+  });
+
+  it("does not count for another tender, even when that tender asks for a bid bond too", () => {
+    const papers = [addedFor(kijaniLine, "have", "k")];
+    const [nairobi, makueni] = matchRequirements([line(nairobiLine), line(makueniLine)], papers).items;
+    expect(nairobi).toMatchObject({ match: "missing", capabilityId: null, unlisted: true });
+    expect(makueni).toMatchObject({ match: "missing", capabilityId: null, unlisted: true });
+  });
+
+  it("keeps each tender's bond separate when several are held", () => {
+    const papers = [addedFor(kijaniLine, "have", "k"), addedFor(nairobiLine, "dont_have", "n"), addedFor(makueniLine, "have", "m")];
+    const items = matchRequirements([line(kijaniLine), line(nairobiLine), line(makueniLine)], papers).items;
+    expect(items.map((item) => [item.match, item.capabilityId])).toEqual([
+      ["met", "k"],
+      ["missing", null],
+      ["met", "m"],
+    ]);
+  });
+
+  it("lets a general bid bond paper meet a line only when it states the same amount", () => {
+    const general = (detail: string | null): ProfileCapability => ({
+      id: "general",
+      kind: "document",
+      name: "Bid bond",
+      detail,
+      evidenceRef: null,
+      holding: "have",
+      selfDeclared: false,
+      expiresOn: null,
+      neverExpires: false,
+    });
+    const [same] = matchRequirements([line(nairobiLine)], [general("Bank guarantee KSh 500,000")]).items;
+    expect(same).toMatchObject({ match: "met", capabilityId: "general" });
+    const [different] = matchRequirements([line(nairobiLine)], [general("Bank guarantee KSh 250,000")]).items;
+    expect(different.match).toBe("missing");
+    const [noAmount] = matchRequirements([line(nairobiLine)], [general(null)]).items;
+    expect(noAmount.match).toBe("missing");
+  });
+});

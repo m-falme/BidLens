@@ -72,20 +72,31 @@ export function awaitingDecisionNote(count: number): string {
 }
 
 export interface EvidenceCounts {
+  /** Papers the team marked Have. A mark is not a file. */
   onFile: number;
+  /** Papers marked Have that also have an uploaded file. */
+  withFile: number;
   expired: number;
 }
 
-/** Have is on file. Expired is a Have whose date is before today, and not marked Does not expire. */
+/**
+ * onFile counts papers marked Have. withFile counts those with an uploaded file.
+ * Expired is a Have whose date is before today, and not marked Does not expire.
+ */
 export function evidenceCounts(
-  documents: readonly { holding: string; expiresOn: string | null; neverExpires: boolean }[],
+  documents: readonly { holding: string; expiresOn: string | null; neverExpires: boolean; hasFile?: boolean }[],
   asOf: string,
 ): EvidenceCounts {
   const onFile = documents.filter((document) => document.holding === "have");
   const expired = onFile.filter(
     (document) => !document.neverExpires && documentIsExpired(document.expiresOn, asOf),
   ).length;
-  return { onFile: onFile.length, expired };
+  return { onFile: onFile.length, withFile: onFile.filter((document) => document.hasFile === true).length, expired };
+}
+
+/** Under the Overview card: how many marked papers have a file, then the expiry note. */
+export function evidenceStatNote(withFile: number, expired: number): string {
+  return `${withFile === 0 ? "None" : withFile} with a file · ${evidenceNote(expired)}`;
 }
 
 export function evidenceNote(expired: number): string {

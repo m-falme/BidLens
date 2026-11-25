@@ -39,7 +39,7 @@ export interface OverviewActivitySource {
 export interface OverviewSnapshot {
   companyName: string;
   uploaded: OverviewTender[];
-  documents: { holding: string; expiresOn: string | null; neverExpires: boolean }[];
+  documents: { holding: string; expiresOn: string | null; neverExpires: boolean; hasFile: boolean }[];
   activity: OverviewActivitySource;
 }
 
@@ -98,6 +98,7 @@ export async function loadOverview(): Promise<OverviewSnapshot> {
       holding: document.holding,
       expiresOn: document.expiresOn,
       neverExpires: document.neverExpires,
+      hasFile: document.file !== null,
     })),
     activity: {
       titles,

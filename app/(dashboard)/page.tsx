@@ -17,7 +17,7 @@ import {
   activeTenderStats,
   awaitingDecisionNote,
   evidenceCounts,
-  evidenceNote,
+  evidenceStatNote,
   nairobiDate,
   nextActions,
   rowPill,
@@ -82,7 +82,11 @@ async function OverviewBody() {
           : activeReviewNote(active.unreviewed, active.total),
     },
     { label: "Awaiting a decision", value: String(awaiting), note: awaitingDecisionNote(awaiting) },
-    { label: "Evidence on file", value: String(evidence.onFile), note: evidenceNote(evidence.expired) },
+    {
+      label: "Documents marked Have",
+      value: String(evidence.onFile),
+      note: evidenceStatNote(evidence.withFile, evidence.expired),
+    },
     { label: "Upcoming deadline", value: deadline.value, note: deadline.note },
   ];
 

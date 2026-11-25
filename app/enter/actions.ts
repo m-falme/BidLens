@@ -17,3 +17,10 @@ export async function signIn() {
   });
   redirect("/");
 }
+
+/** Clears the demo cookie and returns to the sign-in page, so the next person can sign in again. */
+export async function signOut() {
+  const store = await cookies();
+  store.delete(SESSION_COOKIE);
+  redirect("/enter");
+}

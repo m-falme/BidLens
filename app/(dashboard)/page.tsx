@@ -3,11 +3,13 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
-import { ClosedBadge } from "@/components/tenders/markers";
+import { ClosedBadge, PlanMarks } from "@/components/tenders/markers";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NAV } from "@/components/app-shell/nav";
 import { loadOverview } from "@/lib/db/queries/overview";
+import { getWorkspaceSettings } from "@/lib/db/queries/settings";
+import { settingsAlerts } from "@/lib/settings/alerts";
 import { sentenceCase } from "@/lib/format/display";
 import { closingHasPassed } from "@/lib/recommendation/deadline";
 import {
@@ -52,7 +54,20 @@ async function OverviewBody() {
   const awaiting = uploaded.filter((tender) => tender.finalLabel === null).length;
   const evidence = evidenceCounts(snapshot.documents, nairobiDate(asOf));
   const deadline = upcomingDeadline(uploaded, asOf);
-  const actions = nextActions(uploaded);
+  const settings = await getWorkspaceSettings();
+  const alerts = settingsAlerts({
+    tenders: uploaded,
+    documents: snapshot.documents,
+    settings,
+    asOf,
+    today: nairobiDate(asOf),
+  });
+  const base = nextActions(uploaded);
+  const allActions = [...alerts, ...base.items];
+  const actions = {
+    items: allActions.slice(0, 8),
+    more: base.more + Math.max(0, allActions.length - 8),
+  };
   const activity = teamActivity({
     ...snapshot.activity,
     when: formatReviewedAt,
@@ -138,6 +153,7 @@ async function OverviewBody() {
                       <div className="mt-2 flex flex-wrap items-center gap-3">
                         <Pill tone={pill.tone}>{pill.label}</Pill>
                         {closed && <ClosedBadge />}
+                        <PlanMarks plan={tender.plan} />
                       </div>
                     </div>
                     <p className="max-w-40 shrink-0 text-right text-sm text-muted-foreground">

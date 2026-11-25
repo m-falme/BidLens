@@ -337,3 +337,26 @@ describe("Nairobi and Makueni against the seeded checklist", () => {
     expect(result.items.filter((item) => item.match === "met").every((item) => item.selfDeclared)).toBe(true);
   });
 });
+
+describe("uploaded evidence file", () => {
+  const taxPaper = (extra: Partial<ProfileCapability>): ProfileCapability[] =>
+    papers.map((paper) =>
+      paper.name === "Tax compliance certificate" ? { ...paper, holding: "have", ...extra } : paper,
+    );
+  const line = [req("Copy of valid Tax Compliance Certificate")];
+
+  it("says a file is stored, and drops the self-declared wording once a file exists", () => {
+    const declared = matchRequirements(line, taxPaper({ selfDeclared: true, hasFile: false })).items[0];
+    expect(declared).toMatchObject({ match: "met", selfDeclared: true, fileUploaded: false });
+    expect(readinessLabel(declared)).toBe("Claimed, not verified");
+
+    const withFile = matchRequirements(line, taxPaper({ selfDeclared: false, hasFile: true })).items[0];
+    expect(withFile).toMatchObject({ match: "met", selfDeclared: false, fileUploaded: true });
+    expect(readinessLabel(withFile)).toBe("Met");
+  });
+
+  it("never turns a missing paper into a met one just because a file exists", () => {
+    const result = matchRequirements(line, taxPaper({ holding: "dont_have", hasFile: true })).items[0];
+    expect(result.match).not.toBe("met");
+  });
+});

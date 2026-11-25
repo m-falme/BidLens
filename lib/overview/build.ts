@@ -1,6 +1,7 @@
 import { documentIsExpired } from "@/lib/company/papers";
 import { sentenceCase } from "@/lib/format/display";
 import { closingHasPassed, daysUntilDeadline } from "@/lib/recommendation/deadline";
+import { preparationPill, type PlanState } from "@/lib/plan/state";
 import { RECOMMENDATION_LABEL, type RecommendationLabel } from "@/lib/recommendation/labels";
 import type { ReviewStage } from "@/lib/tenders/stage-review";
 
@@ -41,6 +42,8 @@ export interface OverviewTender {
   finalLabel: RecommendationLabel | null;
   /** Stages that have at least one saved review. */
   reviewedStages: readonly ReviewStage[];
+  /** Bid preparation ticks. Null or missing when the plan could not be built. */
+  plan?: PlanState | null;
 }
 
 /** Uploaded tenders whose closing date is still today or ahead. A past date is not active. */
@@ -123,8 +126,10 @@ export interface RowPill {
   tone: "confirmed" | "warning" | "blocker" | "neutral";
 }
 
-/** A saved decision, otherwise the first stage that has no review yet. */
+/** A saved decision, otherwise the first stage that has no review yet. Proceed shows preparation progress. */
 export function rowPill(tender: OverviewTender): RowPill {
+  const preparing = preparationPill(tender.finalLabel, tender.plan);
+  if (preparing) return { label: preparing.label, tone: preparing.ready ? "confirmed" : "warning" };
   if (tender.finalLabel === "proceed_to_preparation") {
     return { label: RECOMMENDATION_LABEL.proceed_to_preparation, tone: "confirmed" };
   }

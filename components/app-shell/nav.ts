@@ -45,7 +45,7 @@ export const NAV = {
     href: "/evidence",
     title: "Evidence library",
     description:
-      "Company documents a tender requirement can link to. A requirement is met only when it links to a document marked Have.",
+      "Company documents a tender requirement can link to. Upload a file for each one. A requirement is met only when it links to a document marked Have.",
     icon: Library,
     planned: [],
   },
@@ -59,7 +59,7 @@ export const NAV = {
   settings: {
     href: "/settings",
     title: "Settings",
-    description: "The review gates this workspace runs with. They are fixed, so there is nothing to save.",
+    description: "Loan rate, review gates, automation and alerts for this workspace. Changes save as you make them.",
     icon: Settings,
     planned: [],
   },

@@ -380,6 +380,47 @@ export type Database = {
           },
         ]
       }
+      document_files: {
+        Row: {
+          capability_id: string
+          created_at: string
+          id: string
+          mime_type: string
+          original_name: string
+          sha256: string
+          size_bytes: number
+          storage_path: string
+        }
+        Insert: {
+          capability_id: string
+          created_at?: string
+          id?: string
+          mime_type: string
+          original_name: string
+          sha256: string
+          size_bytes: number
+          storage_path: string
+        }
+        Update: {
+          capability_id?: string
+          created_at?: string
+          id?: string
+          mime_type?: string
+          original_name?: string
+          sha256?: string
+          size_bytes?: number
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_files_capability_id_fkey"
+            columns: ["capability_id"]
+            isOneToOne: false
+            referencedRelation: "capabilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       duplicate_candidates: {
         Row: {
           candidate_id: string
@@ -904,6 +945,50 @@ export type Database = {
             columns: ["tender_id"]
             isOneToOne: false
             referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_settings: {
+        Row: {
+          alert_closing: boolean
+          alert_closing_days: number
+          alert_documents: boolean
+          alert_documents_days: number
+          auto_start_analysis: boolean
+          company_id: string
+          financing_rate: number
+          require_stage_reviews: boolean
+          updated_at: string
+        }
+        Insert: {
+          alert_closing?: boolean
+          alert_closing_days?: number
+          alert_documents?: boolean
+          alert_documents_days?: number
+          auto_start_analysis?: boolean
+          company_id: string
+          financing_rate?: number
+          require_stage_reviews?: boolean
+          updated_at?: string
+        }
+        Update: {
+          alert_closing?: boolean
+          alert_closing_days?: number
+          alert_documents?: boolean
+          alert_documents_days?: number
+          auto_start_analysis?: boolean
+          company_id?: string
+          financing_rate?: number
+          require_stage_reviews?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]

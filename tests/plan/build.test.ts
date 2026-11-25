@@ -121,10 +121,14 @@ describe("buildActionPlan", () => {
     expect(plan.documents.map((item) => item.title)).toEqual([
       "Copy of valid Tax Compliance Certificate",
       "Copy of the bid bond",
+      "Bid security paid",
     ]);
     expect(plan.documents[0]).toMatchObject({ pageNo: 30, detail: "Missing." });
     expect(plan.documents[1].detail).toBe("Expired. Company record: Bid bond.");
     expect(plan.documents[1].pageNo).toBe(7);
+    // The expired bond keeps the payment row locked until it is renewed.
+    expect(plan.documents[2]).toMatchObject({ missing: true, pageNo: 7 });
+    expect(plan.documents[2].detail).toMatch(/expired/);
     expect(isDocumentToGet({ match: "to_prepare", text: "Form of tender" })).toBe(false);
     expect(isDocumentToGet({ match: "missing", text: "reference sites for similar contracts" })).toBe(false);
   });
@@ -197,7 +201,8 @@ describe("buildActionPlan", () => {
     expect(progress.done).toBe(1);
     expect(progress.label).toBe(`1 of ${rows.length}`);
     expect(preparationIsDone(progress)).toBe(false);
-    const marked = rows.map((row, index) => ({ ...row, done: index < 3 && !row.missing }));
+    // Rows 0 and 2 are locked (missing tax certificate, bid security waiting on the expired bond).
+    const marked = rows.map((row, index) => ({ ...row, done: index < 4 && !row.missing }));
     expect(planProgress(marked).label).toBe(`2 of ${marked.length}`);
     const nineteen = Array.from({ length: 20 }, (_, index) => ({ done: index < 19 }));
     expect(planProgress(nineteen)).toEqual({ done: 19, total: 20, missing: 0, label: "19 of 20" });
@@ -262,11 +267,17 @@ describe("buildActionPlan", () => {
       deadlineAt: null,
       asOf: AS_OF,
     });
-    expect(dated.documents.map((item) => item.detail)).toEqual(["Missing.", "Bid bond delivery.", "Bid bond delivery."]);
-    expect(dated.documents[1].title).toContain("uploaded into the IFMIS");
-    expect(dated.documents[2].title).toContain("delivered physically");
+    expect(dated.documents.map((item) => item.detail)).toEqual([
+      "Missing.",
+      "Waiting for the bid bond. Mark the bond as held in the Evidence library first.",
+      "Bid bond delivery.",
+      "Bid bond delivery.",
+    ]);
+    expect(dated.documents[2].title).toContain("uploaded into the IFMIS");
+    expect(dated.documents[3].title).toContain("delivered physically");
     expect(dated.documents[0].missing).toBe(true);
-    expect(dated.documents[1].missing).toBe(false);
+    expect(dated.documents[1]).toMatchObject({ title: "Bid security paid", missing: true });
+    expect(dated.documents[2].missing).toBe(false);
     expect(dated.outline).toEqual([]);
     const bond = dated.dates.find((item) => item.title === "Bond validity");
     expect(bond?.detail).toBe("must remain valid for 170 days after the opening date of the tender.");

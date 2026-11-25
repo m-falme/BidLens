@@ -22,6 +22,8 @@ export interface ProfileCapability {
   holding?: DocumentHolding | null;
   /** True when Have was declared by the team, not read from a file. */
   selfDeclared?: boolean;
+  /** A file was uploaded for this paper on the Evidence library. BidLens has not read it. */
+  hasFile?: boolean;
   /** ISO date. A Have whose date is before `asOf` is treated as expired. No date is not expired. */
   expiresOn?: string | null;
   /** Ticked "Does not expire". A blank date is not an expiry. */
@@ -50,6 +52,8 @@ export interface MatchedRequirement {
   rationale: string;
   /** The linked paper was marked Have by the team. The file was not checked. */
   selfDeclared: boolean;
+  /** The linked paper has an uploaded file. It is stored, not read or checked by BidLens. */
+  fileUploaded?: boolean;
   /** A missing mandatory proof. Counts as "could disqualify us". */
   disqualifying: boolean;
   /** Met from a company document or certification, so the screen can link to it. */
@@ -243,6 +247,7 @@ function met(requirement: RequirementInput, capability: ProfileCapability, voice
     capabilityName: capability.name,
     evidenceRef: capability.evidenceRef,
     selfDeclared,
+    fileUploaded: capability.hasFile === true,
     rationale: selfDeclared
       ? `${voice.actor} has marked "${capability.name}" as Have (self-declared). The file has not been checked.${ids}`
       : `Matches "${capability.name}" in ${voice.profile}${where}.`,

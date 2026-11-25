@@ -22,3 +22,4 @@ export function getServiceClient(): ServiceClient {
 }
 
 export const SOURCES_BUCKET = "sources";
+export const EVIDENCE_BUCKET = "evidence";

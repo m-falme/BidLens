@@ -18,9 +18,10 @@ async function EvidenceBody() {
   const company = await getDemoCompanyProfile();
   const have = company.documents.filter((document) => document.holding === "have").length;
   const declared = company.documents.filter((document) => document.holding === "have" && document.selfDeclared).length;
+  const withFile = company.documents.filter((document) => document.holding === "have" && document.file).length;
   const notHeld = company.documents.length - have;
   const stats = [
-    { label: "Have", value: have, note: `${declared} self-declared` },
+    { label: "Have", value: have, note: `${withFile} with a file · ${declared} self-declared` },
     { label: "Don't have or expired", value: notHeld, note: "Gaps when a tender needs them" },
     {
       label: "Linked to a tender",

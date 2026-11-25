@@ -4,6 +4,7 @@ import type { MatchedRequirement, ProfileCapability } from "@/lib/readiness/matc
 
 import type { CapabilityKind, DocumentHolding } from "../vocab";
 import { getServiceClient } from "../supabase-server";
+import { listDocumentIdsWithFiles } from "./company";
 import { getDemoCompanyId } from "./tenders";
 
 const CAPABILITY_KINDS = new Set<string>(["service", "tool", "document", "certification", "experience", "sector"]);
@@ -20,6 +21,7 @@ export async function listDemoCapabilities(): Promise<ProfileCapability[]> {
     .select("id, kind, name, detail, evidence_ref, holding, self_declared, expires_on, never_expires")
     .eq("company_id", companyId);
   if (error) fail("load capabilities", error);
+  const withFiles = await listDocumentIdsWithFiles();
   return data.flatMap((row) => {
     if (!CAPABILITY_KINDS.has(row.kind)) return [];
     return [
@@ -31,6 +33,7 @@ export async function listDemoCapabilities(): Promise<ProfileCapability[]> {
         evidenceRef: row.evidence_ref,
         holding: row.holding && HOLDINGS.has(row.holding) ? (row.holding as DocumentHolding) : null,
         selfDeclared: row.self_declared,
+        hasFile: withFiles.has(row.id),
         expiresOn: row.expires_on,
         neverExpires: row.never_expires,
       },

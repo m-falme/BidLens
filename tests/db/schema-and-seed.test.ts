@@ -35,8 +35,8 @@ function pgliteWriter(db: PGlite): SeedWriter {
 
 const TABLES = [
   "action_items", "activities", "bid_decisions", "capabilities", "companies", "county_pending_bills", "county_risk",
-  "decisions", "duplicate_candidates", "fields", "opportunities", "proposals", "requirements",
-  "risk_assessments", "source_pages", "sources", "stage_reviews",
+  "decisions", "document_files", "duplicate_candidates", "fields", "opportunities", "proposals", "requirements",
+  "risk_assessments", "source_pages", "sources", "stage_reviews", "workspace_settings",
 ];
 
 let db: PGlite;
@@ -60,6 +60,8 @@ beforeAll(async () => {
   await db.exec(readFileSync("supabase/migrations/0006_decisions.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0007_document_never_expires.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0008_action_items.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0009_workspace_settings.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0010_document_files.sql", "utf8"));
   plan = await buildSeedPlan(process.cwd());
   await runSeed(plan.steps, pgliteWriter(db));
 }, 120_000);
@@ -144,6 +146,56 @@ describe("0006_decisions.sql", () => {
     await expect(
       db.query(`update public.opportunities set contract_value_kes = -1 where id = $1`, [opportunity.id]),
     ).rejects.toThrow(/contract_value_kes/);
+  });
+});
+
+describe("0010_document_files.sql", () => {
+  it("keeps every uploaded file: insert-only, one row per stored path, only known file types", async () => {
+    const paper = await one<{ id: string }>(`select id from public.capabilities where kind = 'document' limit 1`);
+    const sha = "a".repeat(64);
+    const insert = (path: string, mime = "application/pdf", sha256 = sha) =>
+      db.query(
+        `insert into public.document_files (capability_id, storage_path, original_name, mime_type, size_bytes, sha256)
+         values ($1, $2, 'KRA certificate.pdf', $3, 1200, $4)`,
+        [paper.id, path, mime, sha256],
+      );
+    await insert("documents/one.pdf");
+    await insert("documents/two.pdf"); // a replacement is a new row; the first stays
+    expect(await count("document_files")).toBe(2);
+    await expect(insert("documents/one.pdf")).rejects.toThrow(/document_files_storage_path_key/);
+    await expect(insert("documents/three.gif", "image/gif")).rejects.toThrow(/document_files_mime_type_check/);
+    await expect(insert("documents/four.pdf", "application/pdf", "not-a-hash")).rejects.toThrow(/document_files_sha256_check/);
+    await expect(db.query(`update public.document_files set original_name = 'changed.pdf'`)).rejects.toThrow(/insert-only/);
+    await expect(db.query(`delete from public.document_files`)).rejects.toThrow(/insert-only/);
+    expect(await count("document_files")).toBe(2);
+  });
+});
+
+describe("0009_workspace_settings.sql", () => {
+  it("falls back to today's behaviour, keeps one row per company, and refuses values the app cannot use", async () => {
+    const company = await one<{ id: string }>(`select id from public.companies limit 1`);
+    await db.query(`insert into public.workspace_settings (company_id) values ($1)`, [company.id]);
+    expect(
+      await one(
+        `select financing_rate::float as rate, require_stage_reviews, auto_start_analysis, alert_closing_days, alert_documents_days
+         from public.workspace_settings`,
+      ),
+    ).toEqual({
+      rate: 0.16,
+      require_stage_reviews: false,
+      auto_start_analysis: true,
+      alert_closing_days: 7,
+      alert_documents_days: 30,
+    });
+    await expect(
+      db.query(`insert into public.workspace_settings (company_id) values ($1)`, [company.id]),
+    ).rejects.toThrow(/workspace_settings_pkey/);
+    await expect(
+      db.query(`update public.workspace_settings set financing_rate = 1.5`),
+    ).rejects.toThrow(/financing_rate|numeric field overflow/);
+    await expect(
+      db.query(`update public.workspace_settings set alert_closing_days = 0`),
+    ).rejects.toThrow(/alert_closing_days_check/);
   });
 });
 

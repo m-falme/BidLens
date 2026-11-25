@@ -40,6 +40,8 @@ export interface ProfitInput {
   contractValueKes: number | null;
   deliveryCostKes: number | null;
   band: RiskBand | null;
+  /** Annual loan rate from Settings. Falls back to FINANCING_RATE. */
+  rate?: number;
 }
 
 export interface ProfitResult {
@@ -93,7 +95,7 @@ export function delayTable(input: ProfitInput): DelayTableRow[] | null {
   const margin = (contract - cost) / contract;
   if (!(margin >= 0 && margin < 1)) return null;
 
-  const figures = { V: contract, m: margin, r: FINANCING_RATE };
+  const figures = { V: contract, m: margin, r: input.rate ?? FINANCING_RATE };
   const bandDays = typicalDelayDays(input.band);
   return DELAY_TABLE_ROWS.map((row) => {
     const scenario = marginAtDelay(figures, row.days);
@@ -145,6 +147,7 @@ export function profitResult(input: ProfitInput): ProfitResult | null {
   if (contract === null || cost === null) return null;
   if (!Number.isFinite(contract) || !Number.isFinite(cost) || cost < 0) return null;
 
+  const rate = input.rate ?? FINANCING_RATE;
   const onTimeKes = contract - cost;
   const days = typicalDelayDays(input.band);
   if (!(contract > 0)) {
@@ -152,7 +155,7 @@ export function profitResult(input: ProfitInput): ProfitResult | null {
       onTimeKes,
       lateKes: null,
       lateDays: days,
-      rate: FINANCING_RATE,
+      rate,
       lateNote: "Enter a contract value above zero to calculate profit after a delay.",
     };
   }
@@ -163,26 +166,26 @@ export function profitResult(input: ProfitInput): ProfitResult | null {
       onTimeKes,
       lateKes: null,
       lateDays: days,
-      rate: FINANCING_RATE,
+      rate,
       lateNote: "Delivery cost is not below the contract value, so profit after a delay is not calculated.",
     };
   }
   if (days === null) {
     return {
-      onTimeKes: marginAtDelay({ V: contract, m: margin, r: FINANCING_RATE }, 0).net,
+      onTimeKes: marginAtDelay({ V: contract, m: margin, r: rate }, 0).net,
       lateKes: null,
       lateDays: null,
-      rate: FINANCING_RATE,
+      rate,
       lateNote: "No county score, so the late-payment scenario is not shown.",
     };
   }
 
-  const figures = { V: contract, m: margin, r: FINANCING_RATE };
+  const figures = { V: contract, m: margin, r: rate };
   return {
     onTimeKes: marginAtDelay(figures, 0).net,
     lateKes: marginAtDelay(figures, days).net,
     lateDays: days,
-    rate: FINANCING_RATE,
+    rate,
     lateNote: null,
   };
 }

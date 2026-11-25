@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { z } from "zod";
 
 import { NAV } from "@/components/app-shell/nav";
 import { CARD_CLASS, PageHeading } from "@/components/app-shell/page-heading";
@@ -14,10 +15,12 @@ export const metadata: Metadata = { title: NAV.trail.title };
 async function TrailBody({ searchParams }: { searchParams: PageProps<"/trail">["searchParams"] }) {
   await connection();
   const [params, trail] = await Promise.all([searchParams, loadWorkspaceTrail()]);
-  const tender = typeof params.tender === "string" ? params.tender : null;
+  // Only a real id selects a tender. Anything else shows every tender.
+  const tender = typeof params.tender === "string" && z.uuid().safeParse(params.tender).success ? params.tender : null;
   return (
     <section className={CARD_CLASS}>
-      <TrailList entries={trail.entries} tenders={trail.tenders} initialTender={tender} />
+      {/* Keyed so a different ?tender= starts fresh even if this page is still mounted from an earlier visit. */}
+      <TrailList key={tender ?? "all"} entries={trail.entries} tenders={trail.tenders} initialTender={tender} />
     </section>
   );
 }

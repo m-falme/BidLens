@@ -3,7 +3,7 @@ import Link from "next/link";
 import { formatReviewedAt } from "@/lib/tenders/stage-review";
 import type { TrailEntry } from "@/lib/recommendation/trail";
 
-/** The latest entry on this tender. The full list lives on the Decision trail page. */
+/** The latest entry on this tender. "This tender only" opens the Decision trail filtered to it. */
 export function DecisionTrail({ tenderId, entries }: { tenderId: string; entries: TrailEntry[] }) {
   const latest = entries[0];
   return (
@@ -19,8 +19,12 @@ export function DecisionTrail({ tenderId, entries }: { tenderId: string; entries
             : "No reviews or decisions on this tender yet."}
         </p>
       </div>
-      <Link href={`/trail?tender=${tenderId}`} className="text-sm font-medium text-brand hover:underline">
-        Open the decision trail
+      <Link
+        href={`/trail?tender=${tenderId}`}
+        className="text-sm font-medium text-brand hover:underline"
+        aria-label="Open the decision trail for this tender only"
+      >
+        This tender only
       </Link>
     </section>
   );

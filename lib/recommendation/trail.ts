@@ -9,6 +9,8 @@ export interface TrailEntry {
   what: string;
   note: string | null;
   kind: "review" | "approve" | "override";
+  /** The label a person recorded. Only on approve and override entries. */
+  finalLabel?: RecommendationLabel;
 }
 
 /** Display text only. Stored stage values stay can_bid, can_comply, should_bid. */
@@ -59,6 +61,7 @@ export function decisionTrail(
           : `Overrode the recommendation to ${RECOMMENDATION_LABEL[decision.finalLabel]}`,
       note: decision.reason,
       kind: decision.action,
+      finalLabel: decision.finalLabel,
     })),
   ];
   return entries.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));

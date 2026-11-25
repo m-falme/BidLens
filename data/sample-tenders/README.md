@@ -44,8 +44,8 @@ Fields are named so they can map into BidLens `opportunities` and extracted tend
 | `bid_security` | Plain-language security, or null if none | Extracted field `bid_security` |
 | `eligibility` | List of conditions (JSON array; pipe-separated in the CSV) | Extracted list field `eligibility` (wording aligns with `lib/company/papers.ts` where it applies) |
 | `reserved_for_agpo` | `youth`, `women`, `PWD`, or null | Part of eligibility / reservation |
-| `description` | Two to four sentences. Every notice states that it is fictional. | — |
-| `contact` | Enquiry contact, always an `@example.go.ke` placeholder | Extracted field `contact` |
+| `description` | Three to four sentences. Every notice states that it is fictional. | — |
+| `contact` | Enquiry contact: an office or job title, then a placeholder `@example.go.ke` address, for example `Procurement Office, procurement@example.go.ke`. No personal names. | Extracted field `contact` |
 | `source_platform` | Always `sample` | `opportunities.source_platform` |
 
 Dates run from late 2026 into March 2027. A few notices have a `closing_date` in November 2026 so closed-tender filters can be tested. Estimated values, where stated, range from a few hundred thousand shillings to the high hundreds of millions. Some values and some bid securities are left blank on purpose.

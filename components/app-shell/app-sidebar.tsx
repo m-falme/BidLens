@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LogOut } from "lucide-react";
 import { Suspense } from "react";
 
 import {
@@ -17,6 +18,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import { signOut } from "@/app/enter/actions";
 import { APP_BYLINE, APP_NAME } from "@/lib/app-config";
 import { profileInitials } from "@/lib/overview/build";
 
@@ -144,6 +146,16 @@ export function AppSidebar({
             <p className="truncate text-sm text-muted-foreground">Bid manager · {name}</p>
           </div>
         </div>
+        <form action={signOut}>
+          <button
+            type="submit"
+            className="flex h-9 w-full items-center gap-2.5 rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none group-data-[collapsible=icon]:justify-center"
+            title="Sign out"
+          >
+            <LogOut className="size-4 shrink-0" aria-hidden />
+            <span className="group-data-[collapsible=icon]:hidden">Sign out</span>
+          </button>
+        </form>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

@@ -54,10 +54,10 @@ describe("document synonyms", () => {
 describe("matching uses the synonym map", () => {
   const nairobiBond = "5. Must submit a Tender Security of Kenya Shillings 500,000 issued by a bank";
 
-  it("matches Nairobi's tender security to an existing bid bond", () => {
+  it("matches Nairobi's tender security to a bid bond that states the same amount", () => {
     const result = matchRequirements(
       [req(nairobiBond)],
-      [paper({ id: "bond", kind: "document", name: "Bid bond", holding: "have" })],
+      [paper({ id: "bond", kind: "document", name: "Bid bond", detail: "Bank guarantee for KSh 500,000", holding: "have" })],
       "2026-11-13",
     );
     expect(result.items[0]).toMatchObject({
@@ -68,10 +68,21 @@ describe("matching uses the synonym map", () => {
     });
   });
 
-  it("links a Don't have bid bond from the evidence library", () => {
+  it("does not use a bid bond of a different amount, or one that states no amount", () => {
+    for (const detail of ["Bank guarantee for KSh 250,000", null]) {
+      const result = matchRequirements(
+        [req(nairobiBond)],
+        [paper({ id: "bond", kind: "document", name: "Bid bond", detail, holding: "have" })],
+        "2026-11-13",
+      );
+      expect(result.items[0]).toMatchObject({ match: "missing", capabilityId: null, unlisted: true });
+    }
+  });
+
+  it("links a Don't have bid bond of the same amount from the evidence library", () => {
     const result = matchRequirements(
       [req(nairobiBond)],
-      [paper({ id: "bond", kind: "document", name: "Bid bond", holding: "dont_have" })],
+      [paper({ id: "bond", kind: "document", name: "Bid bond", detail: "Bank guarantee for KSh 500,000", holding: "dont_have" })],
       "2026-11-13",
     );
     expect(result.items[0]).toMatchObject({

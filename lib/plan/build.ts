@@ -270,7 +270,39 @@ function bondValidityPhrase(text: string): string | null {
   return match ? line(match[0]) : null;
 }
 
-function documentDrafts(requirements: readonly PlanRequirement[]): Draft[] {
+/** Plan key of the "Bid security paid" row. The list pages read it to show the small label. */
+export const BID_SECURITY_PAID_KEY = "documents:bond-paid";
+
+const NO_SECURITY = /\b(?:nil|none|not required|no bid security|n\/a)\b/i;
+
+/**
+ * One tick after the bond is obtained. Only for a tender that asks for a bid bond or states a bid security.
+ * While the bond is still a Missing document the row is locked (`missing`), so it cannot be ticked early.
+ */
+function bidSecurityPaidDraft(requirements: readonly PlanRequirement[], fields: readonly PlanField[]): Draft | null {
+  const bondRequirements = requirements.filter((requirement) => BOND.test(requirement.text));
+  const stated = statedScalar(fields, "bid_security");
+  const statedSecurity = stated?.value && !NO_SECURITY.test(stated.value) ? stated : null;
+  if (bondRequirements.length === 0 && !statedSecurity) return null;
+  const waitingForBond = bondRequirements.some(isDocumentToGet);
+  const expired = bondRequirements.some((requirement) => requirement.expired);
+  return {
+    section: "documents",
+    kind: "document",
+    title: "Bid security paid",
+    detail: waitingForBond
+      ? expired
+        ? "The bid bond has expired. Renew it in the Evidence library first."
+        : "Waiting for the bid bond. Mark the bond as held in the Evidence library first."
+      : "Tick this once the bid security has been paid.",
+    pageNo: bondRequirements[0]?.pageNo ?? statedSecurity?.pageNo ?? null,
+    question: null,
+    identity: "bond-paid",
+    missing: waitingForBond,
+  };
+}
+
+function documentDrafts(requirements: readonly PlanRequirement[], fields: readonly PlanField[]): Draft[] {
   const documents = requirements.filter(isDocumentToGet).map((requirement) => {
     const text = line(requirement.text);
     const state = requirement.expired ? "Expired" : "Missing";
@@ -299,7 +331,11 @@ function documentDrafts(requirements: readonly PlanRequirement[]): Draft[] {
       missing: false,
     })),
   );
-  return [...documents, ...steps];
+  const paid = bidSecurityPaidDraft(requirements, fields);
+  if (!paid) return [...documents, ...steps];
+  const lastBond = documents.map((draft) => BOND.test(draft.title)).lastIndexOf(true);
+  const at = lastBond === -1 ? documents.length : lastBond + 1;
+  return [...documents.slice(0, at), paid, ...documents.slice(at), ...steps];
 }
 
 /** Forms to fill, then the response sections. The compliance checklist is not repeated here. */
@@ -407,7 +443,7 @@ export function buildActionPlan(input: {
   deadlineAt: string | null;
   asOf: Date;
 }): ActionPlan {
-  const documents = finish(documentDrafts(input.requirements));
+  const documents = finish(documentDrafts(input.requirements, input.fields));
   const questions = finish(questionDrafts(input.fields));
   const outline = finish(prepareDrafts(input.requirements, input.fields));
   const dates = finish(dateDrafts(input.requirements, input.fields, input.deadlineAt, input.asOf));

@@ -7,6 +7,7 @@ import {
   awaitingDecisionNote,
   evidenceCounts,
   evidenceNote,
+  evidenceStatNote,
   nextActions,
   profileInitials,
   rowPill,
@@ -65,13 +66,15 @@ describe("overview stats", () => {
     expect(
       evidenceCounts(
         [
-          { holding: "have", expiresOn: "2026-11-01", neverExpires: false },
+          { holding: "have", expiresOn: "2026-11-01", neverExpires: false, hasFile: true },
           { holding: "have", expiresOn: null, neverExpires: true },
-          { holding: "dont_have", expiresOn: "2026-01-01", neverExpires: false },
+          { holding: "dont_have", expiresOn: "2026-01-01", neverExpires: false, hasFile: true },
         ],
         "2026-11-13",
       ),
-    ).toEqual({ onFile: 2, expired: 1 });
+    ).toEqual({ onFile: 2, withFile: 1, expired: 1 });
+    expect(evidenceStatNote(2, 0)).toBe("2 with a file · None past the expiry date");
+    expect(evidenceStatNote(0, 1)).toBe("None with a file · 1 past the expiry date");
     expect(upcomingDeadline([tender()], AS_OF)).toEqual({
       value: "11 days",
       note: "Nairobi City County · 24 November 2026",

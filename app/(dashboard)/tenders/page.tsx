@@ -6,35 +6,34 @@ import { Upload } from "lucide-react";
 
 import { NAV } from "@/components/app-shell/nav";
 import { CARD_CLASS, PageHeading } from "@/components/app-shell/page-heading";
-import { ClosedBadge, DecisionBadge, RiskBadge } from "@/components/tenders/markers";
+import { ClosedBadge, DecisionBadge, PlanMarks, RiskBadge } from "@/components/tenders/markers";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { listFieldLeads, listTenders, type FieldLeadListItem, type TenderListItem } from "@/lib/db/queries/tenders";
 import { sentenceCase } from "@/lib/format/display";
+import { loadPlanStates } from "@/lib/plan/progress";
+import { groupTendersByClosing } from "@/lib/tenders/order";
+import type { PlanState } from "@/lib/plan/state";
 import { closingHasPassed } from "@/lib/recommendation/deadline";
 import { presentLeadCopy } from "@/lib/leads/public-names";
+import { leadStatusLabel } from "@/lib/leads/summary";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: NAV.tenders.title };
 
 type Tab = "tenders" | "leads";
 
-const LEAD_STATUS_LABEL: Record<string, string> = {
-  new: "New",
-  verification_required: "Verification required",
-  potential: "Potential",
-  positive: "Positive",
-  discovery_scheduled: "Discovery scheduled",
-  qualified: "Qualified",
-  proposal: "Proposal",
-  awaiting_response: "Awaiting response",
-  on_hold: "On hold",
-  not_qualified: "Not qualified",
-  won: "Won",
-  lost: "Lost",
-};
-
-function TenderRows({ items, empty, asOf }: { items: TenderListItem[]; empty: string; asOf: Date }) {
+function TenderRows({
+  items,
+  empty,
+  asOf,
+  plans,
+}: {
+  items: TenderListItem[];
+  empty: string;
+  asOf: Date;
+  plans?: ReadonlyMap<string, PlanState>;
+}) {
   if (items.length === 0) {
     return <p className="px-5 py-6 text-muted-foreground">{empty}</p>;
   }
@@ -68,10 +67,13 @@ function TenderRows({ items, empty, asOf }: { items: TenderListItem[]; empty: st
                 {tender.closing ? `Closes ${sentenceCase(tender.closing)}` : "Closing date not stated"}
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2 md:justify-end">
-              <DecisionBadge label={tender.finalLabel} />
-              <RiskBadge band={tender.riskBand} />
-              {closed && <ClosedBadge />}
+            <div className="flex flex-col gap-2 md:items-end">
+              <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                <DecisionBadge label={tender.finalLabel} plan={plans?.get(tender.id)} />
+                <RiskBadge band={tender.riskBand} />
+                {closed && <ClosedBadge />}
+              </div>
+              <PlanMarks plan={plans?.get(tender.id)} />
             </div>
           </li>
         );
@@ -102,7 +104,7 @@ function LeadRows({ leads }: { leads: FieldLeadListItem[] }) {
               </p>
             </div>
             <span className="rounded-full bg-muted px-2.5 py-0.5 text-sm text-muted-foreground">
-              {LEAD_STATUS_LABEL[lead.status] ?? sentenceCase(lead.status.replace(/_/g, " "))}
+              {leadStatusLabel(lead.status)}
             </span>
           </li>
         );
@@ -127,6 +129,7 @@ async function TenderTabs({ searchParams }: { searchParams: PageProps<"/tenders"
   const tab: Tab = params.tab === "leads" ? "leads" : "tenders";
   const uploaded = tenders.filter((tender) => tender.pdfSources > 0);
   const imported = tenders.filter((tender) => tender.pdfSources === 0);
+  const plans = tab === "tenders" ? await loadPlanStates(uploaded.map((tender) => tender.id)) : undefined;
   const tabs: { id: Tab; label: string; count: number; href: string }[] = [
     { id: "tenders", label: "Tenders", count: uploaded.length, href: "/tenders" },
     { id: "leads", label: "Leads", count: leads.length + imported.length, href: "/tenders?tab=leads" },
@@ -160,7 +163,18 @@ async function TenderTabs({ searchParams }: { searchParams: PageProps<"/tenders"
 
       {tab === "tenders" ? (
         <section className={CARD_CLASS}>
-          <TenderRows items={uploaded} asOf={asOf} empty="No tenders uploaded yet. Add a tender PDF to start." />
+          {uploaded.length === 0 ? (
+            <TenderRows items={[]} asOf={asOf} empty="No tenders uploaded yet. Add a tender PDF to start." />
+          ) : (
+            groupTendersByClosing(uploaded, asOf).map((group) => (
+              <div key={group.id}>
+                <h2 className="border-t border-border/80 px-5 pt-4 pb-1 text-sm font-semibold tracking-[0.1em] text-muted-foreground uppercase first:border-t-0">
+                  {group.title} <span className="font-normal tabular-nums">({group.items.length})</span>
+                </h2>
+                <TenderRows items={group.items} asOf={asOf} plans={plans} empty="" />
+              </div>
+            ))
+          )}
         </section>
       ) : (
         <div className="flex flex-col gap-4">

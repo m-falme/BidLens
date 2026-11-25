@@ -5,10 +5,81 @@ import { getWorkspaceName } from "@/lib/db/queries/company";
 import { listDemoCapabilities } from "@/lib/db/queries/readiness";
 import { getTenderDetail } from "@/lib/db/queries/tenders";
 import { FIELD_STATUSES, type FieldStatus } from "@/lib/db/vocab";
-import { buildActionPlan, mergeSaved, planFinding, planProgress, type PlanField, type PlanRow } from "@/lib/plan/build";
-import { isWithdrawnByAddendum, matchRequirements } from "@/lib/readiness/match";
+import {
+  buildActionPlan,
+  mergeSaved,
+  planFinding,
+  planProgress,
+  type PlanField,
+  type PlanRow,
+  type SavedAction,
+} from "@/lib/plan/build";
+import { isWithdrawnByAddendum, matchRequirements, type ProfileCapability } from "@/lib/readiness/match";
 
 const STATUSES = new Set<string>(FIELD_STATUSES);
+
+function asStatus(value: string): FieldStatus {
+  return STATUSES.has(value) ? (value as FieldStatus) : "needs_human";
+}
+
+export interface PlanSourceField {
+  key: string;
+  value: string | null;
+  status: string;
+  page_no: number | null;
+  source_id: string | null;
+  ordinal: number;
+}
+
+/**
+ * The plan for one tender, built from data that is already loaded. The tender page, the printable plan and the
+ * list pages all use this, so "X of Y done" is the same number everywhere. Nothing is written.
+ */
+export function planFromData(input: {
+  fields: readonly PlanSourceField[];
+  sourceRoles: ReadonlyMap<string, string>;
+  deadlineAt: string | null;
+  saved: readonly SavedAction[];
+  capabilities: readonly ProfileCapability[];
+  workspaceName: string;
+}): { rows: PlanRow[]; finding: string } {
+  const roleOf = (sourceId: string | null): "main" | "addendum" =>
+    sourceId && input.sourceRoles.get(sourceId) === "addendum" ? "addendum" : "main";
+  const fields: PlanField[] = input.fields.map((field) => ({
+    key: field.key,
+    value: field.value,
+    status: asStatus(field.status),
+    pageNo: field.page_no,
+    role: roleOf(field.source_id),
+    ordinal: field.ordinal,
+  }));
+  const changes = input.fields.flatMap((field) =>
+    field.key === "addendum_change" && field.value ? [field.value] : [],
+  );
+  const readiness = matchRequirements(
+    input.fields.flatMap((field) => {
+      if (field.key !== "mandatory_requirement" || !field.value || roleOf(field.source_id) !== "main") return [];
+      if (isWithdrawnByAddendum(field.value, changes)) return [];
+      return [{ text: field.value, category: "mandatory" as const, pageNo: field.page_no, quote: null }];
+    }),
+    input.capabilities,
+    undefined,
+    input.workspaceName,
+  );
+  const plan = buildActionPlan({
+    requirements: readiness.items.map((item) => ({
+      text: item.text,
+      pageNo: item.pageNo,
+      match: item.match,
+      expired: item.expired,
+      documentName: item.capabilityName,
+    })),
+    fields,
+    deadlineAt: input.deadlineAt,
+    asOf: new Date(),
+  });
+  return { rows: mergeSaved(plan, input.saved), finding: planFinding(plan) };
+}
 
 export interface PrintablePlan {
   tenderId: string;
@@ -18,10 +89,6 @@ export interface PrintablePlan {
   rows: PlanRow[];
   finding: string;
   progressLabel: string;
-}
-
-function asStatus(value: string): FieldStatus {
-  return STATUSES.has(value) ? (value as FieldStatus) : "needs_human";
 }
 
 /** The same plan as the tender page, without writing readiness back. */
@@ -34,50 +101,21 @@ export async function loadPrintablePlan(tenderId: string): Promise<PrintablePlan
   ]);
   if (!detail) return null;
 
-  const roles = new Map(detail.sources.map((source) => [source.id, source.role]));
-  const roleOf = (sourceId: string | null): "main" | "addendum" =>
-    sourceId && roles.get(sourceId) === "addendum" ? "addendum" : "main";
-  const fields: PlanField[] = detail.fields.map((field) => ({
-    key: field.key,
-    value: field.value,
-    status: asStatus(field.status),
-    pageNo: field.page_no,
-    role: roleOf(field.source_id),
-    ordinal: field.ordinal,
-  }));
-  const changes = detail.fields.flatMap((field) =>
-    field.key === "addendum_change" && field.value ? [field.value] : [],
-  );
-  const readiness = matchRequirements(
-    detail.fields.flatMap((field) => {
-      if (field.key !== "mandatory_requirement" || !field.value || roleOf(field.source_id) !== "main") return [];
-      if (isWithdrawnByAddendum(field.value, changes)) return [];
-      return [{ text: field.value, category: "mandatory" as const, pageNo: field.page_no, quote: field.quote }];
-    }),
-    capabilities,
-    undefined,
-    workspaceName,
-  );
-  const plan = buildActionPlan({
-    requirements: readiness.items.map((item) => ({
-      text: item.text,
-      pageNo: item.pageNo,
-      match: item.match,
-      expired: item.expired,
-      documentName: item.capabilityName,
-    })),
-    fields,
+  const { rows, finding } = planFromData({
+    fields: detail.fields,
+    sourceRoles: new Map(detail.sources.map((source) => [source.id, source.role])),
     deadlineAt: detail.opportunity.deadline_at,
-    asOf: new Date(),
+    saved,
+    capabilities,
+    workspaceName,
   });
-  const rows = mergeSaved(plan, saved);
   return {
     tenderId: detail.opportunity.id,
     title: detail.opportunity.title,
     organization: detail.opportunity.organization,
     reference: detail.opportunity.reference,
     rows,
-    finding: planFinding(plan),
+    finding,
     progressLabel: planProgress(rows).label,
   };
 }

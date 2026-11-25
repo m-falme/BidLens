@@ -30,7 +30,16 @@ function runErrorText(error: string | null): string {
   return "Analysis did not finish. Nothing new was saved for this document.";
 }
 
-export function ExtractionStatus({ opportunityId, sources }: { opportunityId: string; sources: SourceStatus[] }) {
+export function ExtractionStatus({
+  opportunityId,
+  sources,
+  autoStart = true,
+}: {
+  opportunityId: string;
+  sources: SourceStatus[];
+  /** Settings → Automation. When off, a person presses Start analysis. */
+  autoStart?: boolean;
+}) {
   const router = useRouter();
   const [requesting, setRequesting] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -57,13 +66,13 @@ export function ExtractionStatus({ opportunityId, sources }: { opportunityId: st
   }
 
   useEffect(() => {
-    if (pending && !autoStarted.current) {
+    if (pending && autoStart && !autoStarted.current) {
       autoStarted.current = true;
       void extract();
     }
     // extract is stable enough for a one-shot start; re-running on its identity would double-trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pending]);
+  }, [pending, autoStart]);
 
   useEffect(() => {
     if (!requesting) return;
@@ -130,6 +139,12 @@ export function ExtractionStatus({ opportunityId, sources }: { opportunityId: st
           </li>
         ))}
       </ul>
+      {pending && !autoStart && !requesting && !runningElsewhere && (
+        <div className="flex flex-col items-start gap-1">
+          <Button onClick={() => void extract()}>Start analysis</Button>
+          <p className="text-sm text-muted-foreground">Automatic analysis is off in Settings.</p>
+        </div>
+      )}
       {anyFailed && !requesting && (
         <div>
           <Button variant="outline" onClick={() => void extract()}>

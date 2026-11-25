@@ -183,6 +183,9 @@ export function documentFromRequirement(text: string): {
   };
 }
 
+/** Written on a paper the team adds from one tender line. The paper belongs to that line (see lib/readiness/match.ts). */
+export const ADDED_FROM_TENDER_REF = "Added from a tender requirement";
+
 /** The words shown on the checklist. */
 export function holdingLabel(holding: DocumentHolding, selfDeclared: boolean): string {
   if (holding === "have" && selfDeclared) return "Have (self-declared)";

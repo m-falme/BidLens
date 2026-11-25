@@ -1,4 +1,4 @@
-import { COMPANY_PAPERS, documentIsExpired, type DocumentHolding } from "@/lib/company/papers";
+import { ADDED_FROM_TENDER_REF, COMPANY_PAPERS, documentIsExpired, type DocumentHolding } from "@/lib/company/papers";
 import type { CapabilityKind } from "@/lib/db/vocab";
 
 import { documentSynonym } from "./synonyms";
@@ -22,6 +22,8 @@ export interface ProfileCapability {
   holding?: DocumentHolding | null;
   /** True when Have was declared by the team, not read from a file. */
   selfDeclared?: boolean;
+  /** A file was uploaded for this paper on the Evidence library. BidLens has not read it. */
+  hasFile?: boolean;
   /** ISO date. A Have whose date is before `asOf` is treated as expired. No date is not expired. */
   expiresOn?: string | null;
   /** Ticked "Does not expire". A blank date is not an expiry. */
@@ -50,6 +52,8 @@ export interface MatchedRequirement {
   rationale: string;
   /** The linked paper was marked Have by the team. The file was not checked. */
   selfDeclared: boolean;
+  /** The linked paper has an uploaded file. It is stored, not read or checked by BidLens. */
+  fileUploaded?: boolean;
   /** A missing mandatory proof. Counts as "could disqualify us". */
   disqualifying: boolean;
   /** Met from a company document or certification, so the screen can link to it. */
@@ -243,6 +247,7 @@ function met(requirement: RequirementInput, capability: ProfileCapability, voice
     capabilityName: capability.name,
     evidenceRef: capability.evidenceRef,
     selfDeclared,
+    fileUploaded: capability.hasFile === true,
     rationale: selfDeclared
       ? `${voice.actor} has marked "${capability.name}" as Have (self-declared). The file has not been checked.${ids}`
       : `Matches "${capability.name}" in ${voice.profile}${where}.`,
@@ -459,6 +464,51 @@ export function isWithdrawnByAddendum(requirementText: string, changes: readonly
   });
 }
 
+function collapse(text: string): string {
+  return text.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+/** A paper the team added from exactly this tender line. It belongs to this line and to no other. */
+function addedFromLine(capability: ProfileCapability, requirementText: string): boolean {
+  return (
+    capability.evidenceRef === ADDED_FROM_TENDER_REF &&
+    !!capability.detail &&
+    collapse(capability.detail) === collapse(requirementText)
+  );
+}
+
+/** A bid bond, tender security or bid security paper. */
+function isBondPaper(capability: ProfileCapability): boolean {
+  if (capability.kind !== "document" && capability.kind !== "certification") return false;
+  if (documentSynonym(capability.name) === "bid-security") return true;
+  return capability.evidenceRef === ADDED_FROM_TENDER_REF && !!capability.detail && documentSynonym(capability.detail) === "bid-security";
+}
+
+/** Shilling amounts written with thousands separators, such as 250,000 or 800,000.00. */
+export function amountsIn(text: string): number[] {
+  return (text.match(/\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?/g) ?? []).map((amount) => Number(amount.replace(/,/g, "")));
+}
+
+/**
+ * A bid bond counts only for the tender it belongs to, and only for the amount that tender asks for.
+ * A paper added from a tender line fits that line alone. Any other bond paper fits only when it states the
+ * same amount as the requirement. A paper that states no amount cannot be shown to match, so it never fits.
+ */
+export function bondPaperFits(capability: ProfileCapability, requirementText: string): boolean {
+  if (addedFromLine(capability, requirementText)) return true;
+  if (capability.evidenceRef === ADDED_FROM_TENDER_REF) return false;
+  const wanted = amountsIn(requirementText);
+  const stated = amountsIn(`${capability.name} ${capability.detail ?? ""}`);
+  return wanted.length > 0 && stated.some((amount) => wanted.includes(amount));
+}
+
+/** A tender sentence is never shown as a company record. A paper added from a line is shown under its kind. */
+function displayCapability(capability: ProfileCapability): ProfileCapability {
+  if (isCompanyRecordName(capability.name)) return capability;
+  const bond = isBondPaper(capability);
+  return { ...capability, name: bond ? "Bid security (added for this tender)" : "Document added for this tender" };
+}
+
 /**
  * Match every requirement. A `met` row always carries a capability id from `capabilities`.
  * Held-proof lines never link to a service, tool or sector.
@@ -470,16 +520,28 @@ export function matchRequirements(
   companyName?: string | null,
 ): ReadinessResult {
   const voice = companyVoice(companyName);
-  const library = capabilities.filter((capability) => isCompanyRecordName(capability.name));
-  const known = new Set(library.map((capability) => capability.id));
+  const named = capabilities.filter((capability) => isCompanyRecordName(capability.name));
+  const known = new Set([
+    ...named.map((capability) => capability.id),
+    ...capabilities.filter((capability) => capability.evidenceRef === ADDED_FROM_TENDER_REF).map((capability) => capability.id),
+  ]);
   const items = requirements.map((requirement) => {
+    // A paper added from this very line decides this line, held first. It never counts for another line.
+    const own = capabilities.filter((capability) => addedFromLine(capability, requirement.text));
+    const ownPaper = own.find((capability) => isHeld(capability, asOf)) ?? own[0];
+    if (ownPaper) {
+      const shown = displayCapability(ownPaper);
+      return isHeld(ownPaper, asOf) ? met(requirement, shown, voice) : notHeld(requirement, shown, asOf, voice);
+    }
+    // Other bond papers count only when they state the amount this tender asks for.
+    const library = named.filter((capability) => !isBondPaper(capability) || bondPaperFits(capability, requirement.text));
     const item = matchOne(requirement, library, asOf, voice);
     if (item.match !== "met") return item;
     const capability = library.find((candidate) => candidate.id === item.capabilityId);
     const proofLine = HELD_PROOF.test(requirement.text) || EXPERIENCE.test(requirement.text) || paperLine(requirement.text);
     const wrongKind = proofLine && capability !== undefined && !PROOF_KINDS.has(capability.kind);
-    const notHeld = capability !== undefined && !isHeld(capability, asOf);
-    if (!capability || !known.has(capability.id) || wrongKind || notHeld) {
+    const unheld = capability !== undefined && !isHeld(capability, asOf);
+    if (!capability || !known.has(capability.id) || wrongKind || unheld) {
       return proofLine
         ? missing(requirement, "No capability in the profile covers this. It is not marked met.")
         : unclear(requirement, `Nothing in ${voice.profile} clearly covers this. A person needs to decide.`);

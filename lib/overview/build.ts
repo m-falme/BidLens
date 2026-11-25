@@ -1,6 +1,7 @@
 import { documentIsExpired } from "@/lib/company/papers";
 import { sentenceCase } from "@/lib/format/display";
 import { closingHasPassed, daysUntilDeadline } from "@/lib/recommendation/deadline";
+import { preparationPill, type PlanState } from "@/lib/plan/state";
 import { RECOMMENDATION_LABEL, type RecommendationLabel } from "@/lib/recommendation/labels";
 import type { ReviewStage } from "@/lib/tenders/stage-review";
 
@@ -41,6 +42,8 @@ export interface OverviewTender {
   finalLabel: RecommendationLabel | null;
   /** Stages that have at least one saved review. */
   reviewedStages: readonly ReviewStage[];
+  /** Bid preparation ticks. Null or missing when the plan could not be built. */
+  plan?: PlanState | null;
 }
 
 /** Uploaded tenders whose closing date is still today or ahead. A past date is not active. */
@@ -69,20 +72,31 @@ export function awaitingDecisionNote(count: number): string {
 }
 
 export interface EvidenceCounts {
+  /** Papers the team marked Have. A mark is not a file. */
   onFile: number;
+  /** Papers marked Have that also have an uploaded file. */
+  withFile: number;
   expired: number;
 }
 
-/** Have is on file. Expired is a Have whose date is before today, and not marked Does not expire. */
+/**
+ * onFile counts papers marked Have. withFile counts those with an uploaded file.
+ * Expired is a Have whose date is before today, and not marked Does not expire.
+ */
 export function evidenceCounts(
-  documents: readonly { holding: string; expiresOn: string | null; neverExpires: boolean }[],
+  documents: readonly { holding: string; expiresOn: string | null; neverExpires: boolean; hasFile?: boolean }[],
   asOf: string,
 ): EvidenceCounts {
   const onFile = documents.filter((document) => document.holding === "have");
   const expired = onFile.filter(
     (document) => !document.neverExpires && documentIsExpired(document.expiresOn, asOf),
   ).length;
-  return { onFile: onFile.length, expired };
+  return { onFile: onFile.length, withFile: onFile.filter((document) => document.hasFile === true).length, expired };
+}
+
+/** Under the Overview card: how many marked papers have a file, then the expiry note. */
+export function evidenceStatNote(withFile: number, expired: number): string {
+  return `${withFile === 0 ? "None" : withFile} with a file · ${evidenceNote(expired)}`;
 }
 
 export function evidenceNote(expired: number): string {
@@ -123,8 +137,10 @@ export interface RowPill {
   tone: "confirmed" | "warning" | "blocker" | "neutral";
 }
 
-/** A saved decision, otherwise the first stage that has no review yet. */
+/** A saved decision, otherwise the first stage that has no review yet. Proceed shows preparation progress. */
 export function rowPill(tender: OverviewTender): RowPill {
+  const preparing = preparationPill(tender.finalLabel, tender.plan);
+  if (preparing) return { label: preparing.label, tone: preparing.ready ? "confirmed" : "warning" };
   if (tender.finalLabel === "proceed_to_preparation") {
     return { label: RECOMMENDATION_LABEL.proceed_to_preparation, tone: "confirmed" };
   }

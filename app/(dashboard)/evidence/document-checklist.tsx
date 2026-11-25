@@ -2,15 +2,27 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useId, useMemo, useState, useTransition } from "react";
+import { useId, useMemo, useRef, useState, useTransition } from "react";
 
+import {
+  EVIDENCE_ACCEPT,
+  EVIDENCE_HELP,
+  evidenceFileProblem,
+  fileSizeText,
+} from "@/lib/company/files";
 import { documentIsExpired, holdingLabel, type PaperGroup } from "@/lib/company/papers";
 import type { CompanyDocument } from "@/lib/db/queries/company";
+import { getBrowserClient } from "@/lib/db/supabase-browser";
 import { DOCUMENT_HOLDINGS, type DocumentHolding } from "@/lib/db/vocab";
-import { sentenceCase } from "@/lib/format/display";
+import { formatWhen, sentenceCase } from "@/lib/format/display";
 import { cn } from "@/lib/utils";
 
-import { saveCompanyDocument } from "./actions";
+import {
+  prepareDocumentUpload,
+  registerDocumentUpload,
+  removeDocumentFileAction,
+  saveCompanyDocument,
+} from "./actions";
 
 const STATUS_OPTIONS: readonly { value: DocumentHolding; label: string }[] = [
   { value: "have", label: "Have" },
@@ -124,10 +136,157 @@ export function EvidenceLibrary({
       )}
 
       <p className="border-t border-border px-5 py-3 text-sm text-muted-foreground">
-        {shown.length} of {documents.length} documents · Have (self-declared) is the team&apos;s own mark; the file has not
-        been checked.
+        {shown.length} of {documents.length} documents · Have (self-declared) is the team&apos;s own mark. Have · file
+        uploaded means a file is stored here. BidLens does not read it, so a person still checks it.
       </p>
     </>
+  );
+}
+
+const BUTTON_CLASS =
+  "h-9 rounded-lg border border-input bg-background px-3 font-medium transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50";
+
+function FileControl({ document }: { document: CompanyDocument }) {
+  const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const file = document.file;
+
+  async function remove() {
+    setError(null);
+    setNote(null);
+    setBusy(true);
+    const result = await removeDocumentFileAction({ id: document.id });
+    setBusy(false);
+    setConfirming(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setNote("File removed. It stays in the history.");
+    router.refresh();
+  }
+
+  async function upload(chosen: File) {
+    setError(null);
+    setNote(null);
+    const problem = evidenceFileProblem(chosen);
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    setBusy(true);
+    try {
+      const prepared = await prepareDocumentUpload({ id: document.id, fileName: chosen.name, size: chosen.size });
+      if (!prepared.ok) throw new Error(prepared.error);
+      const { error: uploadError } = await getBrowserClient()
+        .storage.from("evidence")
+        .uploadToSignedUrl(prepared.data.path, prepared.data.token, chosen, { contentType: prepared.data.contentType });
+      if (uploadError) throw new Error("The file could not be uploaded to storage. Please try again.");
+      const registered = await registerDocumentUpload({
+        id: document.id,
+        path: prepared.data.path,
+        originalName: chosen.name,
+      });
+      if (!registered.ok) throw new Error(registered.error);
+      setNote(registered.data.becameHave ? "File saved. Status set to Have." : "File saved.");
+      router.refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The file could not be saved. Please try again.");
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="mt-3 flex flex-col items-start gap-1 text-sm">
+      {file ? (
+        <p className="min-w-0 break-words">
+          {file.url ? (
+            <a
+              href={file.url}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-brand underline-offset-4 hover:underline"
+            >
+              {file.name}
+            </a>
+          ) : (
+            <span className="font-medium">{file.name}</span>
+          )}
+          <span className="text-muted-foreground">
+            {" "}
+            · {fileSizeText(file.sizeBytes)} · uploaded {formatWhen(file.uploadedAt)}
+            {file.versions > 1 ? ` · ${file.versions - 1} earlier ${file.versions === 2 ? "file" : "files"} kept` : ""}
+          </span>
+        </p>
+      ) : (
+        <p className="text-muted-foreground">No file uploaded.</p>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept={EVIDENCE_ACCEPT}
+        className="sr-only"
+        tabIndex={-1}
+        aria-label={`Choose a file for ${document.name}`}
+        onChange={(event) => {
+          const chosen = event.target.files?.[0];
+          if (chosen) void upload(chosen);
+        }}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className={BUTTON_CLASS}
+          disabled={busy}
+          onClick={() => inputRef.current?.click()}
+        >
+          {busy && !confirming ? "Working…" : file ? "Replace file" : "Upload file"}
+        </button>
+        {file && !confirming && (
+          <button type="button" className={BUTTON_CLASS} disabled={busy} onClick={() => setConfirming(true)}>
+            Remove file
+          </button>
+        )}
+      </div>
+      {file && confirming && (
+        <div className="flex flex-col items-start gap-2 rounded-lg border border-blocker/30 bg-blocker/5 px-3 py-2" role="alertdialog" aria-label="Remove this file">
+          <p>
+            Remove this file? The paper will no longer show a file. The file stays in the history, and a Have goes back to
+            self-declared.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="h-9 rounded-lg bg-blocker px-3 font-medium text-white transition-opacity hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50"
+              disabled={busy}
+              onClick={() => void remove()}
+            >
+              {busy ? "Removing…" : "Yes, remove"}
+            </button>
+            <button type="button" className={BUTTON_CLASS} disabled={busy} onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      <span className="text-muted-foreground">{EVIDENCE_HELP}</span>
+      {note && !error && (
+        <span className="text-confirmed" role="status">
+          {note}
+        </span>
+      )}
+      {error && (
+        <span className="text-blocker" role="alert">
+          {error}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -153,7 +312,10 @@ function DocumentRow({
     holding !== document.holding ||
     neverExpires !== document.neverExpires ||
     dateValue !== (document.neverExpires || document.holding === "dont_have" ? "" : (document.expiresOn ?? ""));
-  const shown = holdingLabel(document.holding, document.selfDeclared);
+  const shown =
+    document.holding === "have" && document.file
+      ? "Have · file uploaded"
+      : holdingLabel(document.holding, document.selfDeclared);
   const usedIn = tenderCount(document);
   const pastDate =
     document.holding === "have" && !document.neverExpires && documentIsExpired(document.expiresOn, today);
@@ -204,6 +366,7 @@ function DocumentRow({
             <span className="text-sm text-muted-foreground">was {wasLabel(document.originalHolding)}</span>
           )}
         </div>
+        <FileControl document={document} />
         <p className="mt-2 text-sm text-muted-foreground">{`Used in ${usedIn} ${usedIn === 1 ? "tender" : "tenders"}`}</p>
         {document.uses.length > 0 && (
           <ul className="mt-1 flex flex-col gap-1 text-sm">

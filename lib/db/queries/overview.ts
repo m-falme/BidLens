@@ -1,6 +1,7 @@
 import "server-only";
 
 import { isDocumentToGet } from "@/lib/plan/build";
+import { loadPlanStates } from "@/lib/plan/progress";
 import { asRecommendationLabel, type RecommendationLabel } from "@/lib/recommendation/labels";
 import { summarizeReview, type ReviewField } from "@/lib/tenders/review";
 import { REVIEW_STAGES, type ReviewStage } from "@/lib/tenders/stage-review";
@@ -38,7 +39,7 @@ export interface OverviewActivitySource {
 export interface OverviewSnapshot {
   companyName: string;
   uploaded: OverviewTender[];
-  documents: { holding: string; expiresOn: string | null; neverExpires: boolean }[];
+  documents: { holding: string; expiresOn: string | null; neverExpires: boolean; hasFile: boolean }[];
   activity: OverviewActivitySource;
 }
 
@@ -66,9 +67,10 @@ export async function loadOverview(): Promise<OverviewSnapshot> {
     reviewed.set(row.tender_id, set);
   }
 
-  const [missingByTender, conflictsByTender] = await Promise.all([
+  const [missingByTender, conflictsByTender, planByTender] = await Promise.all([
     countMissingMandatory(uploadedIds),
     countAddendumConflicts(tenders.filter((tender) => tender.pdfSources > 0 && tender.addenda > 0).map((tender) => tender.id)),
+    loadPlanStates(uploadedIds),
   ]);
 
   const titles = new Map(tenders.map((tender) => [tender.id, tender.title]));
@@ -86,6 +88,7 @@ export async function loadOverview(): Promise<OverviewSnapshot> {
       addendumConflicts: conflictsByTender.get(tender.id) ?? 0,
       finalLabel: tender.finalLabel,
       reviewedStages: [...(reviewed.get(tender.id) ?? [])],
+      plan: planByTender.get(tender.id) ?? null,
     }));
 
   return {
@@ -95,6 +98,7 @@ export async function loadOverview(): Promise<OverviewSnapshot> {
       holding: document.holding,
       expiresOn: document.expiresOn,
       neverExpires: document.neverExpires,
+      hasFile: document.file !== null,
     })),
     activity: {
       titles,

@@ -68,6 +68,9 @@ export function BackArrow() {
     const wasPop = popped;
     popped = false;
     writeStack(rememberLocation(prior, here, wasPop));
+    // The previous page lives in sessionStorage, which only the browser can read. Setting it after mount keeps
+    // the server and first client render identical, so this one-way sync from an external store is deliberate.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPrevious(cameFrom);
   }, [here]);
 

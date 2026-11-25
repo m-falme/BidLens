@@ -202,6 +202,9 @@ export function ReadinessCard({
                             {item.selfDeclared && (
                               <span className="text-muted-foreground">Marked by the team. The file was not checked.</span>
                             )}
+                            {!item.selfDeclared && item.fileUploaded && (
+                              <span className="text-muted-foreground">File uploaded. BidLens has not read it.</span>
+                            )}
                           </span>
                         ) : item.unlisted ? (
                           <span className="flex flex-col gap-2">

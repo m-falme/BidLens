@@ -31,9 +31,10 @@ import {
   spelledCountWithUnit,
 } from "@/lib/format/display";
 import { presentLeadCopy, sourceLabel } from "@/lib/leads/public-names";
+import { getWorkspaceSettings } from "@/lib/db/queries/settings";
+import { ratePercentText } from "@/lib/settings/schema";
 import { buildActionPlan, mergeSaved, planProgress, preparationIsDone, type PlanField } from "@/lib/plan/build";
 import {
-  FINANCING_RATE,
   PROFIT_EMPTY,
   delayTable,
   formatKes,
@@ -66,6 +67,7 @@ import {
 import { ActionPlan } from "./action-plan";
 import { DecisionTrail } from "./decision-trail";
 import { ExtractionStatus, type SourceStatus } from "./extraction-status";
+import { LeadSummaryView } from "./lead-summary";
 import { ProfitForm } from "./profit-form";
 import { ReadinessCard } from "./readiness-card";
 import { RecommendationCard } from "./recommendation-card";
@@ -100,15 +102,32 @@ async function TenderDetail({
   const [{ id }, query] = await Promise.all([params, searchParams]);
   const requestedStage = typeof query.stage === "string" ? query.stage : null;
   if (!z.uuid().safeParse(id).success) notFound();
-  const [detail, counties, stageReviews, bidDecisions, workspaceName, savedActions] = await Promise.all([
+  const [detail, counties, stageReviews, bidDecisions, workspaceName, savedActions, settings] = await Promise.all([
     getTenderDetail(id),
     listCountyRisk(),
     listStageReviews(id),
     listBidDecisions(id),
     getWorkspaceName(),
     listActionItems(id),
+    getWorkspaceSettings(),
   ]);
   if (!detail) notFound();
+
+  // A lead with no tender PDF has nothing to read yet. Show what it holds instead of five empty stages.
+  if (!detail.sources.some((source) => source.kind === "pdf")) {
+    const lead = detail.opportunity;
+    return (
+      <LeadSummaryView
+        title={presentLeadCopy(lead.title) ?? lead.title}
+        organization={presentLeadCopy(lead.organization)}
+        reference={presentLeadCopy(lead.reference)}
+        status={lead.status}
+        deadlineAt={lead.deadline_at}
+        sourceKind={sourceLabel({ kind: "form", opportunityType: lead.type === "field" ? "field" : "procurement" })}
+        fields={detail.fields.map((field) => ({ key: field.key, value: presentLeadCopy(field.value) }))}
+      />
+    );
+  }
 
   const { opportunity, sources, runs, fields, pages, citedPages, fileUrls } = detail;
   const latestRun = new Map<string, RunRecord>();
@@ -359,6 +378,7 @@ async function TenderDetail({
     contractValueKes: opportunity.contract_value_kes,
     deliveryCostKes: opportunity.delivery_cost_kes,
     band: countyRisk?.band ?? null,
+    rate: settings.financingRate,
   };
   const profit = profitResult(figures);
   const delayRows = delayTable(figures);
@@ -432,7 +452,11 @@ async function TenderDetail({
               securityConflict={securityConflict}
               unreadNotice={unreadNotice}
             />
-            {pdfSources.length > 0 && <ExtractionStatus opportunityId={opportunity.id} sources={sourceStatuses} />}
+            {pdfSources.length > 0 && <ExtractionStatus
+                opportunityId={opportunity.id}
+                sources={sourceStatuses}
+                autoStart={settings.autoStartAnalysis}
+              />}
           </>
         }
         compliance={
@@ -474,7 +498,7 @@ async function TenderDetail({
               onTimeLabel={profit ? `If paid on time: ${formatKes(profit.onTimeKes)}` : null}
               rateNote={
                 delayRows
-                  ? `Loan rate ${Math.round(FINANCING_RATE * 100)}% a year. The company profile does not record a loan rate, so the margin calculation uses this rate.`
+                  ? `Loan rate ${ratePercentText(settings.financingRate)}% a year, from Settings. The company profile does not record a loan rate.`
                   : null
               }
               bandNote={

@@ -15,26 +15,12 @@ import { loadPlanStates } from "@/lib/plan/progress";
 import type { PlanState } from "@/lib/plan/state";
 import { closingHasPassed } from "@/lib/recommendation/deadline";
 import { presentLeadCopy } from "@/lib/leads/public-names";
+import { leadStatusLabel } from "@/lib/leads/summary";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: NAV.tenders.title };
 
 type Tab = "tenders" | "leads";
-
-const LEAD_STATUS_LABEL: Record<string, string> = {
-  new: "New",
-  verification_required: "Verification required",
-  potential: "Potential",
-  positive: "Positive",
-  discovery_scheduled: "Discovery scheduled",
-  qualified: "Qualified",
-  proposal: "Proposal",
-  awaiting_response: "Awaiting response",
-  on_hold: "On hold",
-  not_qualified: "Not qualified",
-  won: "Won",
-  lost: "Lost",
-};
 
 function TenderRows({
   items,
@@ -117,7 +103,7 @@ function LeadRows({ leads }: { leads: FieldLeadListItem[] }) {
               </p>
             </div>
             <span className="rounded-full bg-muted px-2.5 py-0.5 text-sm text-muted-foreground">
-              {LEAD_STATUS_LABEL[lead.status] ?? sentenceCase(lead.status.replace(/_/g, " "))}
+              {leadStatusLabel(lead.status)}
             </span>
           </li>
         );

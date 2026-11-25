@@ -37,7 +37,40 @@ import { cn } from "@/lib/utils";
 
 import { saveBidDecisionAction, saveStageReview } from "./actions";
 
-const DEFAULT_REVIEWER = "Bid manager";
+/**
+ * The reviewer's name. There is no default: a decision is recorded by a named person. The name is kept in this
+ * browser so it is typed once, not on every click.
+ */
+const REVIEWER_KEY = "bidlens-reviewer";
+const reviewerListeners = new Set<() => void>();
+
+function subscribeReviewer(onChange: () => void) {
+  reviewerListeners.add(onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    reviewerListeners.delete(onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+function readReviewer(): string {
+  try {
+    return window.localStorage.getItem(REVIEWER_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeReviewer(value: string) {
+  try {
+    window.localStorage.setItem(REVIEWER_KEY, value);
+  } catch {
+    // A private window can refuse storage. The name then lasts until the page reloads.
+  }
+  reviewerListeners.forEach((listener) => listener());
+}
+
+const NAME_HINT = "Enter your name to approve or record a decision.";
 const FOCUS_RING = "focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 
 const hashListeners = new Set<() => void>();
@@ -111,7 +144,10 @@ export function TenderWorkspace({
     tabFromHash(hash) ??
     WORKSPACE_TABS[reviewStageNumber(approval) - 1]?.id ??
     "interpretation";
-  const [name, setName] = useState(DEFAULT_REVIEWER);
+  const name = useSyncExternalStore(subscribeReviewer, readReviewer, () => "");
+  const setName = writeReviewer;
+  const nameOk = name.trim().length >= 2;
+  const blockedByName = !nameOk && active !== "preparation";
   const [note, setNote] = useState("");
   const [noteStage, setNoteStage] = useState<WorkspaceTabId>("commercial");
   const [modalOpen, setModalOpen] = useState(false);
@@ -298,7 +334,9 @@ export function TenderWorkspace({
   const later = nextTab(active);
   const footNote = needsHumanReview
     ? "Needs human review"
-    : active === "recommendation"
+    : blockedByName
+      ? NAME_HINT
+      : active === "recommendation"
       ? "A person approves this recommendation. Nothing is submitted."
       : active === "preparation"
         ? preparationToast(planDone, planTotal)
@@ -441,12 +479,15 @@ export function TenderWorkspace({
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-2">
               <Label htmlFor={nameId} className="text-muted-foreground">
-                Your name
+                Your name (required)
               </Label>
               <Input
                 id={nameId}
                 value={name}
                 autoComplete="name"
+                placeholder="Full name"
+                aria-required
+                aria-invalid={!nameOk}
                 onChange={(event) => setName(event.target.value)}
                 className="h-9 w-40 bg-card"
               />
@@ -467,16 +508,16 @@ export function TenderWorkspace({
                   Change recommendation
                 </button>
                 {changeOpen && (
-                  <Button type="button" variant="outline" disabled={pending} onClick={saveOverride}>
+                  <Button type="button" variant="outline" disabled={pending || !nameOk} onClick={saveOverride}>
                     {pending ? "Saving…" : "Override with reason"}
                   </Button>
                 )}
-                <Button type="button" disabled={pending || needsHumanReview} onClick={approveReview}>
+                <Button type="button" disabled={pending || needsHumanReview || blockedByName} onClick={approveReview}>
                   {pending ? "Saving…" : "Approve"}
                 </Button>
               </>
             ) : (
-              <Button type="button" disabled={pending || needsHumanReview} onClick={approveReview}>
+              <Button type="button" disabled={pending || needsHumanReview || blockedByName} onClick={approveReview}>
                 {pending ? "Saving…" : active === "preparation" ? "Bid preparation reviewed" : "Approve stage →"}
               </Button>
             )}
@@ -510,11 +551,13 @@ export function TenderWorkspace({
               The note is saved on the review and shown on the decision trail. Extraction is not run again.
             </p>
             <div className="mt-4 flex flex-col gap-1">
-              <Label htmlFor={`${nameId}-modal`}>Your name</Label>
+              <Label htmlFor={`${nameId}-modal`}>Your name (required)</Label>
               <Input
                 id={`${nameId}-modal`}
                 value={name}
                 autoComplete="name"
+                placeholder="Full name"
+                aria-required
                 onChange={(event) => setName(event.target.value)}
               />
             </div>
@@ -556,7 +599,7 @@ export function TenderWorkspace({
               <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
                 Cancel
               </Button>
-              <Button type="button" disabled={pending} onClick={saveNote}>
+              <Button type="button" disabled={pending || !nameOk} onClick={saveNote}>
                 {pending ? "Saving…" : "Save note"}
               </Button>
             </div>

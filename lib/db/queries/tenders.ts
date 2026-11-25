@@ -284,6 +284,7 @@ export interface TenderDetail {
     | "type"
     | "created_at"
     | "deadline_at"
+    | "status"
     | "contract_value_kes"
     | "delivery_cost_kes"
   >;
@@ -302,7 +303,7 @@ export async function getTenderDetail(opportunityId: string): Promise<TenderDeta
   const { data: opportunity, error } = await db
     .from("opportunities")
     .select(
-      "id, title, organization, reference, buyer_county, type, created_at, deadline_at, contract_value_kes, delivery_cost_kes",
+      "id, title, organization, reference, buyer_county, type, status, created_at, deadline_at, contract_value_kes, delivery_cost_kes",
     )
     .eq("id", opportunityId)
     .maybeSingle();

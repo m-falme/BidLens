@@ -159,7 +159,7 @@ export function SettingsForm({ initial }: { initial: WorkspaceSettings }) {
 
       <Group
         title="Money assumptions"
-        note="Used for the profit and the delay table on the Commercial stage."
+        note="Used for the profit and the table headed What if payment is delayed on the Commercial stage."
       >
         <Row
           title="Loan rate"

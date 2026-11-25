@@ -67,6 +67,7 @@ import {
 import { ActionPlan } from "./action-plan";
 import { DecisionTrail } from "./decision-trail";
 import { ExtractionStatus, type SourceStatus } from "./extraction-status";
+import { LeadSummaryView } from "./lead-summary";
 import { ProfitForm } from "./profit-form";
 import { ReadinessCard } from "./readiness-card";
 import { RecommendationCard } from "./recommendation-card";
@@ -111,6 +112,22 @@ async function TenderDetail({
     getWorkspaceSettings(),
   ]);
   if (!detail) notFound();
+
+  // A lead with no tender PDF has nothing to read yet. Show what it holds instead of five empty stages.
+  if (!detail.sources.some((source) => source.kind === "pdf")) {
+    const lead = detail.opportunity;
+    return (
+      <LeadSummaryView
+        title={presentLeadCopy(lead.title) ?? lead.title}
+        organization={presentLeadCopy(lead.organization)}
+        reference={presentLeadCopy(lead.reference)}
+        status={lead.status}
+        deadlineAt={lead.deadline_at}
+        sourceKind={sourceLabel({ kind: "form", opportunityType: lead.type === "field" ? "field" : "procurement" })}
+        fields={detail.fields.map((field) => ({ key: field.key, value: presentLeadCopy(field.value) }))}
+      />
+    );
+  }
 
   const { opportunity, sources, runs, fields, pages, citedPages, fileUrls } = detail;
   const latestRun = new Map<string, RunRecord>();

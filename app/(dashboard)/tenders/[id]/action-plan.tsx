@@ -58,7 +58,7 @@ export function ActionPlan({
         <p className="text-lg font-semibold tabular-nums">{progress.label}</p>
         {editable ? (
           <Button variant="outline" nativeButton={false} render={<Link href={`/tenders/${tenderId}/plan`} />}>
-            Download plan
+            Print plan
           </Button>
         ) : null}
       </div>

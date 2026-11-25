@@ -95,9 +95,10 @@ export function ProfitForm({
         <div className="flex flex-col gap-3">
           {onTimeLabel && <p>{onTimeLabel}</p>}
           {rateNote && <p className="text-muted-foreground">{rateNote}</p>}
+          <h3 className="font-heading text-lg font-semibold">What if payment is delayed</h3>
           <div className="overflow-x-auto">
             <table className="w-full table-fixed border-collapse text-left text-sm">
-              <caption className="sr-only">Payment delay at 2, 6, 12 and 24 months</caption>
+              <caption className="sr-only">What if payment is delayed: profit after 2, 6, 12 and 24 months</caption>
               <thead>
                 <tr className="border-b border-border text-muted-foreground">
                   <th className="px-2 py-2 font-medium">Payment delay</th>

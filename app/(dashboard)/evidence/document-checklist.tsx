@@ -17,7 +17,12 @@ import { DOCUMENT_HOLDINGS, type DocumentHolding } from "@/lib/db/vocab";
 import { formatWhen, sentenceCase } from "@/lib/format/display";
 import { cn } from "@/lib/utils";
 
-import { prepareDocumentUpload, registerDocumentUpload, saveCompanyDocument } from "./actions";
+import {
+  prepareDocumentUpload,
+  registerDocumentUpload,
+  removeDocumentFileAction,
+  saveCompanyDocument,
+} from "./actions";
 
 const STATUS_OPTIONS: readonly { value: DocumentHolding; label: string }[] = [
   { value: "have", label: "Have" },
@@ -138,13 +143,32 @@ export function EvidenceLibrary({
   );
 }
 
+const BUTTON_CLASS =
+  "h-9 rounded-lg border border-input bg-background px-3 font-medium transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50";
+
 function FileControl({ document }: { document: CompanyDocument }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const file = document.file;
+
+  async function remove() {
+    setError(null);
+    setNote(null);
+    setBusy(true);
+    const result = await removeDocumentFileAction({ id: document.id });
+    setBusy(false);
+    setConfirming(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setNote("File removed. It stays in the history.");
+    router.refresh();
+  }
 
   async function upload(chosen: File) {
     setError(null);
@@ -215,14 +239,42 @@ function FileControl({ document }: { document: CompanyDocument }) {
           if (chosen) void upload(chosen);
         }}
       />
-      <button
-        type="button"
-        className="h-9 rounded-lg border border-input bg-background px-3 font-medium transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50"
-        disabled={busy}
-        onClick={() => inputRef.current?.click()}
-      >
-        {busy ? "Uploading…" : file ? "Replace file" : "Upload file"}
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className={BUTTON_CLASS}
+          disabled={busy}
+          onClick={() => inputRef.current?.click()}
+        >
+          {busy && !confirming ? "Working…" : file ? "Replace file" : "Upload file"}
+        </button>
+        {file && !confirming && (
+          <button type="button" className={BUTTON_CLASS} disabled={busy} onClick={() => setConfirming(true)}>
+            Remove file
+          </button>
+        )}
+      </div>
+      {file && confirming && (
+        <div className="flex flex-col items-start gap-2 rounded-lg border border-blocker/30 bg-blocker/5 px-3 py-2" role="alertdialog" aria-label="Remove this file">
+          <p>
+            Remove this file? The paper will no longer show a file. The file stays in the history, and a Have goes back to
+            self-declared.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="h-9 rounded-lg bg-blocker px-3 font-medium text-white transition-opacity hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50"
+              disabled={busy}
+              onClick={() => void remove()}
+            >
+              {busy ? "Removing…" : "Yes, remove"}
+            </button>
+            <button type="button" className={BUTTON_CLASS} disabled={busy} onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       <span className="text-muted-foreground">{EVIDENCE_HELP}</span>
       {note && !error && (
         <span className="text-confirmed" role="status">

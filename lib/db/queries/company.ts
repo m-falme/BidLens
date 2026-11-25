@@ -2,6 +2,8 @@ import "server-only";
 
 import { cache } from "react";
 
+import { currentFiles } from "@/lib/company/files";
+import { sameName, TEAM_EVIDENCE_REF, type ProfileKind } from "@/lib/company/profile";
 import { COMPANY_PAPERS, documentNameFromRequirement, type DocumentHolding, type PaperGroup } from "@/lib/company/papers";
 import { DOCUMENT_HOLDINGS } from "@/lib/db/vocab";
 
@@ -50,6 +52,8 @@ export interface CompanyDocument {
 export interface CompanyProfile {
   name: string;
   legalName: string | null;
+  /** The registered name before the first edit. Null until someone changes it. */
+  originalLegalName: string | null;
   documents: CompanyDocument[];
 }
 
@@ -110,7 +114,12 @@ export async function getDemoCompanyProfile(): Promise<CompanyProfile> {
       ? profile.legal_name
       : null;
 
-  return { name: company.name, legalName, documents };
+  const originalLegalName =
+    profile && typeof profile === "object" && !Array.isArray(profile) && typeof profile.legal_name_original === "string"
+      ? profile.legal_name_original
+      : null;
+
+  return { name: company.name, legalName, originalLegalName, documents };
 }
 
 export type CapabilityKind = "service" | "tool" | "sector";
@@ -119,6 +128,8 @@ export interface CompanyCapability {
   id: string;
   name: string;
   kind: CapabilityKind;
+  /** Added by the team. Not stated in the company profile document, and not checked. */
+  addedByTeam: boolean;
 }
 
 /** Services, tools and sectors stated in the company profile. Read-only on screen. */
@@ -126,14 +137,14 @@ export async function listCompanyCapabilities(): Promise<CompanyCapability[]> {
   const companyId = await getDemoCompanyId();
   const { data, error } = await getServiceClient()
     .from("capabilities")
-    .select("id, name, kind")
+    .select("id, name, kind, verified")
     .eq("company_id", companyId)
     .in("kind", ["service", "tool", "sector"])
     .order("name");
   if (error) fail("load capabilities", error);
   return data.flatMap((row) =>
     row.kind === "service" || row.kind === "tool" || row.kind === "sector"
-      ? [{ id: row.id, name: row.name, kind: row.kind }]
+      ? [{ id: row.id, name: row.name, kind: row.kind, addedByTeam: !row.verified }]
       : [],
   );
 }
@@ -263,42 +274,75 @@ export async function insertOtherDocument(requirement: string): Promise<void> {
 // Evidence files
 // ---------------------------------------------------------------------------
 
+interface FileRow {
+  id: string;
+  capabilityId: string;
+  storagePath: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
 /**
- * Newest file per document, with a signed link. A read that fails (for example before the migration is
+ * The files that still count, newest first: those uploaded after a paper's latest removal. Throws if the file
+ * list cannot be read. The removals table arrived in a later migration, so if it is missing nothing counts as removed.
+ */
+async function loadCurrentFileRows(capabilityIds?: readonly string[]): Promise<FileRow[]> {
+  const db = getServiceClient();
+  const filesQuery = db
+    .from("document_files")
+    .select("id, capability_id, storage_path, original_name, mime_type, size_bytes, created_at");
+  const removalsQuery = db.from("document_file_removals").select("capability_id, created_at");
+  const [files, removals] = await Promise.all([
+    capabilityIds ? filesQuery.in("capability_id", [...capabilityIds]) : filesQuery,
+    capabilityIds ? removalsQuery.in("capability_id", [...capabilityIds]) : removalsQuery,
+  ]);
+  if (files.error) throw new Error(files.error.message);
+  if (removals.error) console.error("load document file removals", removals.error);
+  return currentFiles(
+    files.data.map((row) => ({
+      id: row.id,
+      capabilityId: row.capability_id,
+      storagePath: row.storage_path,
+      originalName: row.original_name,
+      mimeType: row.mime_type,
+      sizeBytes: row.size_bytes,
+      createdAt: row.created_at,
+    })),
+    (removals.data ?? []).map((row) => ({ capabilityId: row.capability_id, createdAt: row.created_at })),
+  );
+}
+
+/**
+ * Newest current file per document, with a signed link. A read that fails (for example before a migration is
  * applied) means "no files": the Evidence library still opens.
  */
 async function listDocumentFiles(capabilityIds: readonly string[]): Promise<Map<string, DocumentFile>> {
   const result = new Map<string, DocumentFile>();
   if (capabilityIds.length === 0) return result;
   try {
-    const db = getServiceClient();
-    const { data, error } = await db
-      .from("document_files")
-      .select("id, capability_id, storage_path, original_name, mime_type, size_bytes, created_at")
-      .in("capability_id", [...capabilityIds])
-      .order("created_at", { ascending: false });
-    if (error) throw new Error(error.message);
-
-    const newest = new Map<string, (typeof data)[number]>();
+    const rows = await loadCurrentFileRows(capabilityIds);
+    const newest = new Map<string, FileRow>();
     const versions = new Map<string, number>();
-    for (const row of data) {
-      versions.set(row.capability_id, (versions.get(row.capability_id) ?? 0) + 1);
-      if (!newest.has(row.capability_id)) newest.set(row.capability_id, row);
+    for (const row of rows) {
+      versions.set(row.capabilityId, (versions.get(row.capabilityId) ?? 0) + 1);
+      if (!newest.has(row.capabilityId)) newest.set(row.capabilityId, row);
     }
 
-    const signed = await db.storage
-      .from(EVIDENCE_BUCKET)
-      .createSignedUrls([...newest.values()].map((row) => row.storage_path), 60 * 60);
+    const signed = await getServiceClient()
+      .storage.from(EVIDENCE_BUCKET)
+      .createSignedUrls([...newest.values()].map((row) => row.storagePath), 60 * 60);
     const urls = new Map((signed.data ?? []).map((entry) => [entry.path, entry.signedUrl]));
 
     for (const [capabilityId, row] of newest) {
       result.set(capabilityId, {
         id: row.id,
-        name: row.original_name,
-        mimeType: row.mime_type,
-        sizeBytes: row.size_bytes,
-        uploadedAt: row.created_at,
-        url: urls.get(row.storage_path) ?? null,
+        name: row.originalName,
+        mimeType: row.mimeType,
+        sizeBytes: row.sizeBytes,
+        uploadedAt: row.createdAt,
+        url: urls.get(row.storagePath) ?? null,
         versions: versions.get(capabilityId) ?? 1,
       });
     }
@@ -309,23 +353,18 @@ async function listDocumentFiles(capabilityIds: readonly string[]): Promise<Map<
 }
 
 async function documentHasFile(capabilityId: string): Promise<boolean> {
-  const { count, error } = await getServiceClient()
-    .from("document_files")
-    .select("id", { count: "exact", head: true })
-    .eq("capability_id", capabilityId);
-  if (error) {
+  try {
+    return (await loadCurrentFileRows([capabilityId])).length > 0;
+  } catch (error) {
     console.error("count document files", error);
     return false;
   }
-  return (count ?? 0) > 0;
 }
 
-/** Ids of company papers that have at least one uploaded file. Empty when the table is not there yet. */
+/** Ids of company papers that have a current file. Empty when the table is not there yet. */
 export async function listDocumentIdsWithFiles(): Promise<Set<string>> {
   try {
-    const { data, error } = await getServiceClient().from("document_files").select("capability_id");
-    if (error) throw new Error(error.message);
-    return new Set(data.map((row) => row.capability_id));
+    return new Set((await loadCurrentFileRows()).map((row) => row.capabilityId));
   } catch (error) {
     console.error("list document files", error);
     return new Set();
@@ -389,4 +428,111 @@ export async function insertDocumentFile(draft: DocumentFileDraft): Promise<{ be
     .eq("id", draft.capabilityId);
   if (updateError) fail("update document status", updateError);
   return { becameHave };
+}
+
+/**
+ * Removes the paper's file from view. Nothing is deleted: the file stays in Storage and in the history, and a
+ * removal row records when. A Have that no longer has a file goes back to self-declared.
+ */
+export async function removeDocumentFile(capabilityId: string): Promise<void> {
+  const document = await getDocumentForUpload(capabilityId);
+  if (!document) throw new Error("That paper is not on the company checklist.");
+  if (!(await documentHasFile(capabilityId))) throw new Error("There is no file to remove.");
+  const db = getServiceClient();
+
+  const { error } = await db.from("document_file_removals").insert({ capability_id: capabilityId });
+  if (error) fail("remove document file", error);
+
+  const { data: row, error: loadError } = await db
+    .from("capabilities")
+    .select("holding, verified")
+    .eq("id", capabilityId)
+    .single();
+  if (loadError) fail("load document status", loadError);
+  if (row.holding === "have") {
+    const { error: updateError } = await db
+      .from("capabilities")
+      .update({ self_declared: !row.verified })
+      .eq("id", capabilityId);
+    if (updateError) fail("update document status", updateError);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Editing "Your company profile"
+// ---------------------------------------------------------------------------
+
+/** The registered name. The workspace name is fixed because the app finds the company by it. */
+export async function updateLegalName(name: string): Promise<void> {
+  const companyId = await getDemoCompanyId();
+  const db = getServiceClient();
+  const { data, error } = await db.from("companies").select("profile_json").eq("id", companyId).single();
+  if (error) fail("load company", error);
+  const current =
+    data.profile_json && typeof data.profile_json === "object" && !Array.isArray(data.profile_json)
+      ? { ...data.profile_json }
+      : {};
+  // The first edit keeps the original, the way a changed document status does.
+  if (typeof current.legal_name === "string" && typeof current.legal_name_original !== "string") {
+    current.legal_name_original = current.legal_name;
+  }
+  current.legal_name = name;
+  const { error: updateError } = await db
+    .from("companies")
+    .update({ profile_json: current, updated_at: new Date().toISOString() })
+    .eq("id", companyId);
+  if (updateError) fail("save registered name", updateError);
+}
+
+/**
+ * Adds a service, tool or sector the team states. It is the team's own claim: not verified, and a tender line
+ * matched to it reads "Claimed, not verified".
+ */
+export async function addCompanyCapability(kind: ProfileKind, name: string): Promise<void> {
+  const companyId = await getDemoCompanyId();
+  const db = getServiceClient();
+  const { data: existing, error: loadError } = await db
+    .from("capabilities")
+    .select("name")
+    .eq("company_id", companyId)
+    .eq("kind", kind);
+  if (loadError) fail("load capabilities", loadError);
+  if (existing.some((row) => sameName(row.name, name))) throw new Error("That is already on your profile.");
+
+  const { error } = await db.from("capabilities").insert({
+    company_id: companyId,
+    kind,
+    name,
+    detail: null,
+    evidence_ref: TEAM_EVIDENCE_REF,
+    verified: false,
+    self_declared: true,
+  });
+  if (error) {
+    if (error.code === "23505") throw new Error("That is already on your profile.");
+    fail("add capability", error);
+  }
+}
+
+/**
+ * Removes something the team added. An item stated in the profile document cannot be removed here.
+ * Readiness rows that matched it are computed output and are rebuilt the next time a tender opens, so they go with it.
+ */
+export async function removeCompanyCapability(id: string): Promise<void> {
+  const companyId = await getDemoCompanyId();
+  const db = getServiceClient();
+  const { data: row, error: loadError } = await db
+    .from("capabilities")
+    .select("id, kind, verified")
+    .eq("id", id)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (loadError) fail("load capability", loadError);
+  if (!row || !["service", "tool", "sector"].includes(row.kind)) throw new Error("That item was not found.");
+  if (row.verified) throw new Error("This is stated in your company profile document, so it cannot be removed here.");
+
+  const { error: unlinkError } = await db.from("requirements").delete().eq("capability_id", id);
+  if (unlinkError) fail("clear linked readiness rows", unlinkError);
+  const { error } = await db.from("capabilities").delete().eq("id", id);
+  if (error) fail("remove capability", error);
 }

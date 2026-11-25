@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  currentFiles,
   EVIDENCE_MAX_BYTES,
   evidenceExtension,
   evidenceFileProblem,
@@ -46,5 +47,37 @@ describe("evidence file rules", () => {
     expect(fileSizeText(500)).toBe("1 KB");
     expect(fileSizeText(250 * 1024)).toBe("250 KB");
     expect(fileSizeText(3.5 * 1024 * 1024)).toBe("3.5 MB");
+  });
+});
+
+describe("which files still count after a removal", () => {
+  const file = (id: string, capabilityId: string, createdAt: string) => ({ id, capabilityId, createdAt });
+
+  it("shows every file, newest first, when nothing was removed", () => {
+    const files = [file("a", "p1", "2026-11-01T10:00:00Z"), file("b", "p1", "2026-11-03T10:00:00Z")];
+    expect(currentFiles(files, []).map((f) => f.id)).toEqual(["b", "a"]);
+  });
+
+  it("hides files uploaded before the latest removal, for that paper only", () => {
+    const files = [
+      file("old", "p1", "2026-11-01T10:00:00Z"),
+      file("newer", "p1", "2026-11-02T10:00:00Z"),
+      file("other", "p2", "2026-11-01T10:00:00Z"),
+    ];
+    const removals = [{ capabilityId: "p1", createdAt: "2026-11-03T10:00:00Z" }];
+    expect(currentFiles(files, removals).map((f) => f.id)).toEqual(["other"]);
+  });
+
+  it("counts a file uploaded after the removal, and uses the latest of several removals", () => {
+    const files = [
+      file("before", "p1", "2026-11-01T10:00:00Z"),
+      file("between", "p1", "2026-11-04T10:00:00Z"),
+      file("after", "p1", "2026-11-09T10:00:00Z"),
+    ];
+    const removals = [
+      { capabilityId: "p1", createdAt: "2026-11-03T10:00:00Z" },
+      { capabilityId: "p1", createdAt: "2026-11-06T10:00:00Z" },
+    ];
+    expect(currentFiles(files, removals).map((f) => f.id)).toEqual(["after"]);
   });
 });

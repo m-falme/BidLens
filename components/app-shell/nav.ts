@@ -37,7 +37,7 @@ export const NAV = {
   company: {
     href: "/company",
     title: "Company profile",
-    description: "The organisation and the capabilities stated in its profile.",
+    description: "Your company profile: who you are and what you deliver. Tenders are checked against it.",
     icon: Building2,
     planned: [],
   },

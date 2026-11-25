@@ -50,3 +50,25 @@ export function fileSizeText(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
+
+/**
+ * The files that still count for a paper. A removal hides every file uploaded before it; a later upload counts
+ * again. Nothing is deleted: the hidden files stay in Storage and in document_files as history.
+ * Input order does not matter. Output is newest first.
+ */
+export function currentFiles<T extends { capabilityId: string; createdAt: string }>(
+  files: readonly T[],
+  removals: readonly { capabilityId: string; createdAt: string }[],
+): T[] {
+  const latestRemoval = new Map<string, string>();
+  for (const removal of removals) {
+    const seen = latestRemoval.get(removal.capabilityId);
+    if (!seen || removal.createdAt > seen) latestRemoval.set(removal.capabilityId, removal.createdAt);
+  }
+  return files
+    .filter((file) => {
+      const removedAt = latestRemoval.get(file.capabilityId);
+      return !removedAt || file.createdAt > removedAt;
+    })
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+}

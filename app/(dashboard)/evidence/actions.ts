@@ -17,6 +17,7 @@ import {
   getDocumentForUpload,
   insertDocumentFile,
   insertOtherDocument,
+  removeDocumentFile,
   updateCompanyDocument,
 } from "@/lib/db/queries/company";
 import { EVIDENCE_BUCKET, getServiceClient } from "@/lib/db/supabase-server";
@@ -155,5 +156,20 @@ export async function registerDocumentUpload(
     console.error("register document upload", error);
     await discard();
     return { ok: false, error: "The file could not be saved. Please try again." };
+  }
+}
+
+/** Takes the file off the paper. The file and its history are kept; see 0012_document_file_removals.sql. */
+export async function removeDocumentFileAction(input: unknown): Promise<DocumentActionResult> {
+  const parsed = z.object({ id: z.uuid() }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That paper could not be found." };
+  try {
+    await removeDocumentFile(parsed.data.id);
+    revalidateEvidence();
+    return { ok: true };
+  } catch (error) {
+    console.error("remove document file", error);
+    const known = error instanceof Error && error.message === "There is no file to remove.";
+    return { ok: false, error: known ? "There is no file to remove." : "The file could not be removed. Please try again." };
   }
 }

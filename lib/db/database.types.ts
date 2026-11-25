@@ -380,6 +380,32 @@ export type Database = {
           },
         ]
       }
+      document_file_removals: {
+        Row: {
+          capability_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          capability_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          capability_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_file_removals_capability_id_fkey"
+            columns: ["capability_id"]
+            isOneToOne: false
+            referencedRelation: "capabilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_files: {
         Row: {
           capability_id: string

@@ -360,3 +360,26 @@ describe("uploaded evidence file", () => {
     expect(result.match).not.toBe("met");
   });
 });
+
+describe("a service the team added on the Company profile page", () => {
+  const added: ProfileCapability = {
+    id: "svc-team",
+    kind: "service",
+    name: "Drone survey mapping",
+    detail: null,
+    evidenceRef: "Added by the team on the Company profile page",
+    selfDeclared: true,
+  };
+  const line = [req("The supplier shall deliver Drone survey mapping for the county roads")];
+
+  it("can be matched, but is shown as a claim, never as a checked capability", () => {
+    const item = matchRequirements(line, [...services, added]).items[0];
+    expect(item).toMatchObject({ match: "met", capabilityId: "svc-team", selfDeclared: true });
+    expect(readinessLabel(item)).toBe("Claimed, not verified");
+  });
+
+  it("does nothing for a line it does not name", () => {
+    const item = matchRequirements([req("Copy of valid Tax Compliance Certificate")], [...services, added]).items[0];
+    expect(item.match).toBe("missing");
+  });
+});

@@ -35,7 +35,7 @@ function pgliteWriter(db: PGlite): SeedWriter {
 
 const TABLES = [
   "action_items", "activities", "bid_decisions", "capabilities", "companies", "county_pending_bills", "county_risk",
-  "decisions", "document_files", "duplicate_candidates", "fields", "opportunities", "proposals", "requirements",
+  "decisions", "document_file_removals", "document_files", "duplicate_candidates", "fields", "opportunities", "proposals", "requirements",
   "risk_assessments", "source_pages", "sources", "stage_reviews", "workspace_settings",
 ];
 
@@ -62,6 +62,7 @@ beforeAll(async () => {
   await db.exec(readFileSync("supabase/migrations/0008_action_items.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0009_workspace_settings.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0010_document_files.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0012_document_file_removals.sql", "utf8"));
   plan = await buildSeedPlan(process.cwd());
   await runSeed(plan.steps, pgliteWriter(db));
 }, 120_000);
@@ -146,6 +147,19 @@ describe("0006_decisions.sql", () => {
     await expect(
       db.query(`update public.opportunities set contract_value_kes = -1 where id = $1`, [opportunity.id]),
     ).rejects.toThrow(/contract_value_kes/);
+  });
+});
+
+describe("0012_document_file_removals.sql", () => {
+  it("records a removal and never lets it be changed or erased", async () => {
+    const paper = await one<{ id: string }>(`select id from public.capabilities where kind = 'document' limit 1`);
+    await db.query(`insert into public.document_file_removals (capability_id) values ($1)`, [paper.id]);
+    expect(await count("document_file_removals")).toBe(1);
+    await expect(db.query(`update public.document_file_removals set created_at = now()`)).rejects.toThrow(/insert-only/);
+    await expect(db.query(`delete from public.document_file_removals`)).rejects.toThrow(/insert-only/);
+    await expect(
+      db.query(`insert into public.document_file_removals (capability_id) values (gen_random_uuid())`),
+    ).rejects.toThrow(/document_file_removals_capability_id_fkey/);
   });
 });
 

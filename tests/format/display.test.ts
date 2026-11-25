@@ -9,9 +9,21 @@ describe("sentenceCase", () => {
     );
     expect(sentenceCase("Makueni county revenue system")).toBe("Makueni county revenue system");
     expect(sentenceCase("SD-WAN")).toBe("SD-WAN");
-    expect(sentenceCase("MONDAY 23RD NOVEMBER, 2026")).toBe("Monday 23rd november, 2026");
-    expect(sentenceCase("20TH NOVEMBER, 2026 at 11:00 a.m.")).toBe("20th november, 2026 at 11:00 a.m.");
+    expect(sentenceCase("MONDAY 23RD NOVEMBER, 2026")).toBe("Monday 23rd November, 2026");
+    expect(sentenceCase("20TH NOVEMBER, 2026 at 11:00 a.m.")).toBe("20th November, 2026 at 11:00 a.m.");
     expect(sentenceCase("Nairobi City County")).toBe("Nairobi City County");
+  });
+
+  it("keeps place names, months and acronyms in a shouted title", () => {
+    expect(sentenceCase("PROVISION OF ERP SYSTEM FOR CENTRAL BANK OF KENYA")).toBe(
+      "Provision of ERP system for central bank of Kenya",
+    );
+    expect(sentenceCase("SUPPORT SERVICES OF ENTERPRISE RESOURCE PLANNING SYSTEM (ERP) FOR COUNTY GOVERNMENT OF KIAMBU")).toBe(
+      "Support services of enterprise resource planning system (ERP) for county government of Kiambu",
+    );
+    expect(sentenceCase("SUPPLY OF SD-WAN, MPLS AND INTERNET CONNECTIVITY")).toBe("Supply of SD-WAN, MPLS and internet connectivity");
+    expect(sentenceCase("THE SUPPLIER MAY DELIVER GOODS TO THE BAY AREA")).toBe("The supplier may deliver goods to the bay area");
+    expect(sentenceCase("GOVERNMENT OF HOMA BAY COUNTY")).toBe("Government of Homa Bay county");
   });
 });
 
@@ -39,6 +51,8 @@ describe("risk chip and spelled counts", () => {
     expect(spelledCountWithUnit("one (1)", "days")).toBe("1 day");
     expect(spelledCountWithUnit("twenty percent (20%)", "days")).toBe("twenty percent (20%)");
     expect(spelledCountWithUnit("30 days", "days")).toBe("30 days");
+    expect(spelledCountWithUnit("60", "days")).toBe("60 days");
+    expect(spelledCountWithUnit("1", "days")).toBe("1 day");
   });
 });
 

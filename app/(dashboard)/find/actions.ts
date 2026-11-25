@@ -34,6 +34,16 @@ export async function findTendersAction(): Promise<FindActionResult> {
   }
 }
 
+/** The leads already started from this source, by reference. Read only; used when a ranking is reused. */
+export async function startedLeadsAction(): Promise<{ ok: true; started: Record<string, string> } | { ok: false }> {
+  try {
+    return { ok: true, started: Object.fromEntries(await listStartedSampleLeads()) };
+  } catch (error) {
+    console.error("list started tenders", error);
+    return { ok: false };
+  }
+}
+
 /** Creates a lead from one result. The tender is looked up on the server by id; nothing from the browser is stored. */
 export async function startTenderAction(tenderId: unknown): Promise<StartActionResult> {
   if (typeof tenderId !== "string" || tenderId.length === 0 || tenderId.length > 40) {

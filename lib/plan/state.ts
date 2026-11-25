@@ -42,5 +42,6 @@ export function preparationPill(
 ): PreparationPill | null {
   if (finalLabel !== "proceed_to_preparation" || !state || state.total === 0) return null;
   if (state.done === state.total) return { label: "Ready for final review", ready: true };
-  return { label: `Preparing · ${state.done} of ${state.total}`, ready: false };
+  // The count sits next to the pill ("3 of 8 done"), so the pill does not repeat it.
+  return { label: "Preparing", ready: false };
 }

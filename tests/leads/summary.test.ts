@@ -88,3 +88,13 @@ describe("lead summary", () => {
     expect(leadStatusLabel("something_new")).toBe("Something new");
   });
 });
+
+describe("readableSheetDate", () => {
+  it("writes sheet dates the way people read them and leaves other text alone", async () => {
+    const { readableSheetDate } = await import("@/lib/leads/summary");
+    expect(readableSheetDate("2026-11-28 10:00")).toBe("28 Nov 2026, 10:00");
+    expect(readableSheetDate("2026-11-11")).toBe("11 Nov 2026");
+    expect(readableSheetDate("22 Dec 2026")).toBe("22 Dec 2026");
+    expect(readableSheetDate("2026-13-01")).toBe("2026-13-01");
+  });
+});

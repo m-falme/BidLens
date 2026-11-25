@@ -166,9 +166,14 @@ export interface NextAction {
 
 const NEXT_ACTION_LIMIT = 8;
 
-export function nextActions(tenders: readonly OverviewTender[]): { items: NextAction[]; more: number } {
+/** Actions for tenders that can still be bid on. A closed tender needs no fact checks or decision. */
+export function nextActions(
+  tenders: readonly OverviewTender[],
+  asOf?: Date,
+): { items: NextAction[]; more: number } {
   const items: NextAction[] = [];
   for (const tender of tenders) {
+    if (asOf && closingHasPassed({ closingText: tender.closing, deadlineAt: tender.deadlineAt, asOf })) continue;
     const name = sentenceCase(tender.title);
     if (tender.addendumConflicts > 0) {
       const count = tender.addendumConflicts;

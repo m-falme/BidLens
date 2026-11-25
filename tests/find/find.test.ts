@@ -138,6 +138,12 @@ describe("ranking", () => {
     expect(out.find((r) => r.tender.id === "a")?.fit).toBe(BLOCKED_FIT_CAP);
     expect(out.find((r) => r.tender.id === "b")?.aiWritten).toBe(false);
   });
+
+  it("keeps a missing paper the code found when the AI reasons leave it out", () => {
+    const ranked = rankByCode([tender({ id: "a", eligibility: ["Audited accounts for the last 3 years"] })], PROFILE, NOW);
+    const out = applyAiFit(ranked, [{ id: "a", fit: 80, reasons: ["Matches your data analytics", "Fits your sector", "Good size"] }]);
+    expect(out[0]?.reasons).toEqual(["Matches your data analytics", "Fits your sector", "Needs Audited accounts, which you don't have"]);
+  });
 });
 
 describe("findTenders", () => {

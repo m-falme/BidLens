@@ -36,6 +36,9 @@ export function capabilityHits(names: readonly string[], haystack: string): stri
   });
 }
 
+/** Open tenders at or above this fit are listed as best matches; the rest are folded away. */
+export const GOOD_FIT = 40;
+
 /** Highest fit a tender that needs a paper or reservation the company lacks can show. */
 export const BLOCKED_FIT_CAP = 25;
 
@@ -110,10 +113,16 @@ export function applyAiFit(ranked: readonly RankedTender[], ai: readonly AiFit[]
       const item = byId.get(row.tender.id);
       if (!item || item.reasons.length === 0) return row;
       const fit = Math.max(0, Math.min(100, Math.round(item.fit)));
+      // A gap the code found (missing paper, AGPO reservation) is always shown, even if the AI left it out.
+      const reasons = item.reasons.slice(0, 3);
+      const fact = row.checks.facts[0]?.split(". ")[0]?.replace(/\.$/, "");
+      if (fact && !reasons.some((reason) => /\b(needs?|reserved|agpo|don't have|do not have)\b/i.test(reason))) {
+        reasons.splice(Math.min(reasons.length, 2), 1, fact);
+      }
       return {
         ...row,
         fit: row.eligibility === "blocked" ? Math.min(fit, BLOCKED_FIT_CAP) : fit,
-        reasons: item.reasons.slice(0, 3),
+        reasons,
         aiWritten: true,
       };
     })

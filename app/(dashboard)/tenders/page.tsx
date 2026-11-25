@@ -70,7 +70,8 @@ function TenderRows({
             <div className="flex flex-col gap-2 md:items-end">
               <div className="flex flex-wrap items-center gap-2 md:justify-end">
                 <DecisionBadge label={tender.finalLabel} plan={plans?.get(tender.id)} />
-                <RiskBadge band={tender.riskBand} />
+                {/* A lead with no county has nothing to score; the chip would only say "No score". */}
+                {(!workbook || tender.county) && <RiskBadge band={tender.riskBand} />}
                 {closed && <ClosedBadge />}
               </div>
               <PlanMarks plan={plans?.get(tender.id)} />
@@ -183,8 +184,15 @@ async function TenderTabs({ searchParams }: { searchParams: PageProps<"/tenders"
             <LeadRows leads={leads} />
           </section>
           <section className={CARD_CLASS}>
-            <SectionHead title="Imported leads" note="Tender notices imported from the pipeline sheet, with no PDF yet." />
-            <TenderRows items={imported} asOf={asOf} empty="No imported leads." />
+            <SectionHead
+              title="Imported leads"
+              note="Tender notices with no PDF yet, from the pipeline sheet or Find tenders. Open for bids first."
+            />
+            <TenderRows
+              items={groupTendersByClosing(imported, asOf).flatMap((group) => group.items)}
+              asOf={asOf}
+              empty="No imported leads."
+            />
           </section>
         </div>
       )}

@@ -70,7 +70,7 @@ describe("preparation progress on the list", () => {
 
   it("moves the pill forward only after Proceed to preparation was recorded", () => {
     const state = { done: 3, total: 8, bidSecurityPaid: true };
-    expect(preparationPill("proceed_to_preparation", state)).toEqual({ label: "Preparing · 3 of 8", ready: false });
+    expect(preparationPill("proceed_to_preparation", state)).toEqual({ label: "Preparing", ready: false });
     expect(preparationPill("proceed_to_preparation", { ...state, done: 8 })).toEqual({
       label: "Ready for final review",
       ready: true,
@@ -96,7 +96,7 @@ describe("preparation progress on the list", () => {
     };
     expect(rowPill(base).label).toBe("Proceed to preparation");
     expect(rowPill({ ...base, plan: { done: 3, total: 8, bidSecurityPaid: false } })).toEqual({
-      label: "Preparing · 3 of 8",
+      label: "Preparing",
       tone: "warning",
     });
     expect(rowPill({ ...base, plan: { done: 8, total: 8, bidSecurityPaid: true } })).toEqual({

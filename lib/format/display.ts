@@ -84,6 +84,9 @@ export function riskChipLabel(band: RiskBand | null): string {
  * A value that already carries a unit, or is not that pattern, is left as written.
  */
 export function spelledCountWithUnit(value: string, unit: string): string {
+  // A bare number ("60") gets its unit, so the screen does not show a number with no meaning.
+  const bare = value.trim().match(/^(\d+)$/);
+  if (bare) return `${bare[1]} ${Number(bare[1]) === 1 && unit.endsWith("s") ? unit.slice(0, -1) : unit}`;
   const match = value.trim().match(/^[A-Za-z][A-Za-z\s-]*\((\d+)\)\.?$/);
   if (!match) return value;
   const count = Number(match[1]);
@@ -100,13 +103,42 @@ export function asDecision(value: string | null | undefined): DecisionChoice | n
   return DECISION_CHOICES.find((choice) => choice === value) ?? null;
 }
 
+/** Words that keep a capital after a shouted title is lowered: months, days, Kenya and the 47 counties. */
+const PROPER_WORDS = [
+  "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November",
+  "December", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday", "Kenya", "Kenyan",
+  "Baringo", "Bomet", "Bungoma", "Busia", "Elgeyo", "Marakwet", "Embu", "Garissa", "Homa", "Bay", "Isiolo", "Kajiado",
+  "Kakamega", "Kericho", "Kiambu", "Kilifi", "Kirinyaga", "Kisii", "Kisumu", "Kitui", "Kwale", "Laikipia", "Lamu",
+  "Machakos", "Makueni", "Mandera", "Marsabit", "Meru", "Migori", "Mombasa", "Murang'a", "Nairobi", "Nakuru", "Nandi",
+  "Narok", "Nyamira", "Nyandarua", "Nyeri", "Samburu", "Siaya", "Taita", "Taveta", "Tana", "Tharaka", "Nithi",
+  "Trans", "Nzoia", "Turkana", "Uasin", "Gishu", "Vihiga", "Wajir", "Pokot",
+];
+const PROPER = new Map(PROPER_WORDS.map((word) => [word.toLowerCase(), word]));
+// "May" and "Bay" are ordinary words too; they keep a capital only next to a number or the county name.
+const AMBIGUOUS = new Set(["may", "bay", "trans", "tana"]);
+/** Short shouted tokens that are acronyms, not words (ERP, ICT, SD-WAN). Kept upper case. */
+const ACRONYMS = new Set([
+  "erp", "ict", "icta", "crmis", "sd-wan", "mpls", "kra", "cbk", "ifmis", "agpo", "nca", "it", "ai", "bi", "sla", "pin",
+  "cr12", "lan", "wan", "cctv", "hr", "gis", "api", "eoi", "rfp", "rfq", "kes", "ksh", "mis",
+]);
+
 /** A shouted title becomes one sentence. Mixed-case titles, and the stored quote, stay as written. */
 export function sentenceCase(value: string): string {
   const letters = value.replace(/[^A-Za-z]/g, "");
   if (letters.length < 8) return value;
   const upper = (value.match(/[A-Z]/g) ?? []).length;
   if (upper / letters.length < 0.7) return value;
-  const text = value.toLowerCase();
+  const words = value.toLowerCase().split(/(\s+|[(),&/]+)/);
+  const text = words
+    .map((word, i) => {
+      if (ACRONYMS.has(word)) return word.toUpperCase();
+      const proper = PROPER.get(word);
+      if (!proper) return word;
+      if (!AMBIGUOUS.has(word)) return proper;
+      const near = `${words[i - 2] ?? ""} ${words[i + 2] ?? ""}`;
+      return /\d|homa|pokot|nzoia|river/.test(near) ? proper : word;
+    })
+    .join("");
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 

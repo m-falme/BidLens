@@ -5,7 +5,7 @@ import { ClosedBadge } from "@/components/tenders/markers";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { closingLabel, sentenceCase } from "@/lib/format/display";
-import { buildLeadSummary, leadStatusLabel, type LeadFieldValue } from "@/lib/leads/summary";
+import { buildLeadSummary, leadStatusLabel, readableSheetDate, type LeadFieldValue } from "@/lib/leads/summary";
 import { daysUntilClosing } from "@/lib/recommendation/deadline";
 
 /**
@@ -33,10 +33,12 @@ export function LeadSummaryView({
 }) {
   const summary = buildLeadSummary(fields);
   const rawClosing = fields.find((field) => field.key === "submission_deadline")?.value ?? null;
-  const closes = closingLabel(rawClosing, deadlineAt);
+  const closes = rawClosing ? readableSheetDate(rawClosing) : closingLabel(null, deadlineAt);
   const days = daysUntilClosing({ closingText: rawClosing, deadlineAt, asOf: new Date() });
   const facts = summary.facts.map((fact) => (fact.label === "Closes" && closes ? { ...fact, value: closes } : fact));
-  const subtitle = [organization ? sentenceCase(organization) : null, reference].filter(Boolean).join(" · ");
+  // A field lead is titled by its organisation; do not print the same name twice.
+  const showOrganization = organization && organization.trim().toLowerCase() !== title.trim().toLowerCase();
+  const subtitle = [showOrganization ? sentenceCase(organization) : null, reference].filter(Boolean).join(" · ");
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">

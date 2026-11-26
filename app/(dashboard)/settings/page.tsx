@@ -59,7 +59,7 @@ async function Loaded() {
               <div key={item.label} className="border-t border-border/80 py-3 first:border-t-0">
                 <dt className="text-sm text-muted-foreground">{item.label}</dt>
                 <dd className="mt-0.5 font-medium">
-                  {item.label === "Local model" ? `Local model: ${item.value.toLowerCase()}` : item.value}
+                  {item.value}
                 </dd>
               </div>
             ))}

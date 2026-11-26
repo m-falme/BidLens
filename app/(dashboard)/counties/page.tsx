@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 
 import { NAV } from "@/components/app-shell/nav";
-import { PageNav } from "@/components/app-shell/page-nav";
+import { PageHeading } from "@/components/app-shell/page-heading";
 import { RiskBadge } from "@/components/tenders/markers";
 import { Skeleton } from "@/components/ui/skeleton";
 import { listCountyRisk } from "@/lib/db/queries/tenders";
@@ -39,7 +39,7 @@ async function CountyList() {
               <tr key={county.county} className="border-b last:border-0">
                 <td className="px-4 py-3 font-medium">{county.county}</td>
                 <td className="px-4 py-3">
-                  <RiskBadge band={county.band} />
+                  <RiskBadge band={county.band} short />
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums">
                   {county.score === null ? "—" : county.score.toFixed(1)}
@@ -56,12 +56,8 @@ async function CountyList() {
 
 export default function CountiesPage() {
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
-      <PageNav crumbs={[{ href: NAV.overview.href, label: NAV.overview.title }, { label: NAV.counties.title }]} />
-      <div className="space-y-1">
-        <h1 className="text-3xl font-semibold tracking-tight">{NAV.counties.title}</h1>
-        <p className="text-muted-foreground">Payment-risk bands for the 47 counties.</p>
-      </div>
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+      <PageHeading eyebrow="Workspace" title={NAV.counties.title} description="Payment-risk bands for the 47 counties." />
       <Suspense fallback={<Skeleton className="h-96 w-full" />}>
         <CountyList />
       </Suspense>

@@ -69,6 +69,20 @@ function clean(value: string | null | undefined): string | null {
   return text ? text : null;
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "2026-11-28 10:00" → "28 Nov 2026, 10:00". Anything that is not a plain sheet date stays as written. */
+export function readableSheetDate(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}:\d{2}))?(?::\d{2})?$/.exec(value.trim());
+  if (!match) return value;
+  const [, year, month, day, time] = match;
+  const name = MONTHS[Number(month) - 1];
+  if (!name || Number(day) < 1 || Number(day) > 31) return value;
+  return `${Number(day)} ${name} ${year}${time ? `, ${time}` : ""}`;
+}
+
+const DATE_KEYS = new Set(["submission_deadline", "publication_date", "date_captured", "follow_up_date"]);
+
 /**
  * Picks the useful fields of a lead. A field with no value is left out, and a second line that repeats an
  * earlier one (the same organisation named twice) is dropped.
@@ -86,7 +100,7 @@ export function buildLeadSummary(fields: readonly LeadFieldValue[]): LeadSummary
       const value = byKey.get(key);
       if (!value || seen.has(value.toLowerCase())) return [];
       seen.add(value.toLowerCase());
-      return [{ label, value }];
+      return [{ label, value: DATE_KEYS.has(key) ? readableSheetDate(value) : value }];
     });
 
   const verified = byKey.get("human_verified")?.toLowerCase();

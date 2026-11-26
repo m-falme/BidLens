@@ -372,7 +372,16 @@ async function TenderDetail({
     compliance: { answer: complianceAnswer, carried: carriedFrom("Interpretation", interpretationAnswer) },
     commercial: { answer: commercial, carried: carriedFrom("Compliance", complianceAnswer) },
     recommendation: { answer: recommendationAnswer, carried: carriedFrom("Commercial", commercial) },
-    preparation: { answer: preparationAnswer, carried: carriedFrom("Recommendation", recommendationAnswer) },
+    // Preparation follows what a person decided, which can differ from what BidLens suggested.
+    preparation: {
+      answer: preparationAnswer,
+      carried: carriedFrom(
+        "Recommendation",
+        latestDecision && latestDecision.finalLabel !== recommendation.label
+          ? `BidLens suggested ${RECOMMENDATION_LABEL[recommendation.label]}; ${latestDecision.reviewerName} decided ${RECOMMENDATION_LABEL[latestDecision.finalLabel]}.`
+          : recommendationAnswer,
+      ),
+    },
   };
   const figures = {
     contractValueKes: opportunity.contract_value_kes,

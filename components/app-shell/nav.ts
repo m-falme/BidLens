@@ -5,6 +5,7 @@ import {
   Landmark,
   LayoutDashboard,
   Library,
+  Search,
   Settings,
   Users,
   type LucideIcon,
@@ -32,6 +33,14 @@ export const NAV = {
     title: "Tenders",
     description: "Uploaded tenders and the leads the team has captured.",
     icon: FileSearch,
+    planned: [],
+  },
+  find: {
+    href: "/find",
+    title: "Find tenders",
+    description:
+      "Reads tenders from a source, checks them against your company profile and evidence, and ranks the best matches.",
+    icon: Search,
     planned: [],
   },
   company: {
@@ -80,7 +89,7 @@ export const NAV = {
 } as const satisfies Record<string, NavItem>;
 
 /** Counties stays a working page. It is linked from a tender, not listed in the sidebar. */
-export const WORKSPACE_NAV: readonly NavItem[] = [NAV.overview, NAV.tenders, NAV.company, NAV.evidence];
+export const WORKSPACE_NAV: readonly NavItem[] = [NAV.overview, NAV.tenders, NAV.find, NAV.company, NAV.evidence];
 
 export const MANAGE_NAV: readonly NavItem[] = [NAV.trail, NAV.settings];
 
@@ -93,6 +102,7 @@ export function shellCrumb(pathname: string): { group: "Workspace" | "Manage"; p
   const manage = MANAGE_NAV.find((item) => isNavItemActive(pathname, item.href));
   if (manage) return { group: "Manage", page: manage.title };
   if (pathname.startsWith("/tenders")) return { group: "Workspace", page: NAV.tenders.title };
+  if (pathname.startsWith("/find")) return { group: "Workspace", page: NAV.find.title };
   if (pathname.startsWith("/company")) return { group: "Workspace", page: NAV.company.title };
   if (pathname.startsWith("/evidence")) return { group: "Workspace", page: NAV.evidence.title };
   if (pathname.startsWith("/leads")) return { group: "Workspace", page: NAV.leads.title };

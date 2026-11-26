@@ -12,6 +12,7 @@ import { getWorkspaceSettings } from "@/lib/db/queries/settings";
 import { settingsAlerts } from "@/lib/settings/alerts";
 import { sentenceCase } from "@/lib/format/display";
 import { closingHasPassed } from "@/lib/recommendation/deadline";
+import { groupTendersByClosing } from "@/lib/tenders/order";
 import {
   activeReviewNote,
   activeTenderStats,
@@ -36,6 +37,11 @@ const PILL_CLASS: Record<RowPill["tone"], string> = {
   blocker: "bg-blocker/12 text-blocker",
   neutral: "bg-muted text-muted-foreground",
 };
+
+/** Open tenders (soonest first), then undated, then the most recently closed. */
+function openFirst<T extends { closing: string | null; deadlineAt: string | null }>(items: readonly T[], asOf: Date): T[] {
+  return groupTendersByClosing(items, asOf).flatMap((group) => group.items);
+}
 
 function Pill({ tone, children }: { tone: RowPill["tone"]; children: string }) {
   return (
@@ -62,7 +68,7 @@ async function OverviewBody() {
     asOf,
     today: nairobiDate(asOf),
   });
-  const base = nextActions(uploaded);
+  const base = nextActions(uploaded, asOf);
   const allActions = [...alerts, ...base.items];
   const actions = {
     items: allActions.slice(0, 8),
@@ -124,8 +130,8 @@ async function OverviewBody() {
         <section className="rounded-xl border border-border bg-card shadow-[0_8px_28px_rgba(23,32,42,0.05)]">
           <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-2">
             <div>
-              <h2 className="font-heading text-lg font-semibold">Active tenders</h2>
-              <p className="text-sm text-muted-foreground">Latest uploaded documents</p>
+              <h2 className="font-heading text-lg font-semibold">Uploaded tenders</h2>
+              <p className="text-sm text-muted-foreground">Open for bids first, then the most recently closed</p>
             </div>
             <Link href="/tenders" className="text-sm font-medium text-brand hover:underline">
               All tenders
@@ -135,7 +141,7 @@ async function OverviewBody() {
             <p className="px-5 py-6 text-muted-foreground">No tenders uploaded yet.</p>
           ) : (
             <ul>
-              {uploaded.slice(0, 6).map((tender) => {
+              {openFirst(uploaded, asOf).slice(0, 6).map((tender) => {
                 const pill = rowPill(tender);
                 const buyer = tender.buyer?.trim() ? sentenceCase(tender.buyer) : "Buyer not stated";
                 const meta = [buyer, tender.reference].filter(Boolean).join(" · ");
@@ -161,7 +167,7 @@ async function OverviewBody() {
                       </div>
                     </div>
                     <p className="max-w-40 shrink-0 text-right text-sm text-muted-foreground">
-                      {tender.closing?.trim() || "Not stated"}
+                      {tender.closing?.trim() ? sentenceCase(tender.closing) : "Not stated"}
                     </p>
                   </li>
                 );

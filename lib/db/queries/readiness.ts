@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { MatchedRequirement, ProfileCapability } from "@/lib/readiness/match";
+import { readinessUnchanged, type StoredRequirementRow } from "@/lib/readiness/stored";
 
 import type { CapabilityKind, DocumentHolding } from "../vocab";
 import { getServiceClient } from "../supabase-server";
@@ -41,33 +42,67 @@ export async function listDemoCapabilities(): Promise<ProfileCapability[]> {
   });
 }
 
-/** Replaces the computed readiness rows. Human edits of requirements are not in this step. */
+/**
+ * Saves the computed readiness rows (a cache of what the tender page shows). Human edits of requirements are not in
+ * this step.
+ *
+ * Writes nothing when the saved rows already match, so simply opening a tender page leaves the database alone.
+ * When it does write, the new rows go in first and every older row is removed after, so two page loads at the same
+ * moment (a prefetch and a click) end with one set of rows, not two.
+ */
 export async function replaceReadiness(
   opportunityId: string,
   items: readonly MatchedRequirement[],
   readinessPct: number,
 ): Promise<void> {
   const db = getServiceClient();
-  const { error: deleteError } = await db.from("requirements").delete().eq("opportunity_id", opportunityId);
-  if (deleteError) fail("clear readiness", deleteError);
-  if (items.length > 0) {
-    const { error } = await db.from("requirements").insert(
-      items.map((item) => ({
-        opportunity_id: opportunityId,
-        text: item.text,
-        category: item.category,
-        page_no: item.pageNo,
-        quote: item.quote,
-        match: item.match,
-        capability_id: item.capabilityId,
-        rationale: item.rationale,
-      })),
-    );
+  const rows: StoredRequirementRow[] = items.map((item) => ({
+    text: item.text,
+    category: item.category,
+    page_no: item.pageNo,
+    quote: item.quote,
+    match: item.match,
+    capability_id: item.capabilityId,
+    rationale: item.rationale,
+  }));
+
+  const [stored, opportunity] = await Promise.all([
+    db
+      .from("requirements")
+      .select("text, category, page_no, quote, match, capability_id, rationale")
+      .eq("opportunity_id", opportunityId),
+    db.from("opportunities").select("readiness_pct").eq("id", opportunityId).maybeSingle(),
+  ]);
+  if (stored.error) fail("load saved readiness", stored.error);
+  if (opportunity.error) fail("load readiness score", opportunity.error);
+  const pctUnchanged = opportunity.data !== null && Number(opportunity.data.readiness_pct) === readinessPct;
+  if (readinessUnchanged(stored.data, rows) && pctUnchanged) return;
+
+  if (rows.length === 0) {
+    const { error } = await db.from("requirements").delete().eq("opportunity_id", opportunityId);
+    if (error) fail("clear readiness", error);
+  } else {
+    const { data: inserted, error } = await db
+      .from("requirements")
+      .insert(rows.map((row) => ({ ...row, opportunity_id: opportunityId })))
+      .select("created_at")
+      .limit(1);
     if (error) fail("save readiness", error);
+    const batchAt = inserted[0]?.created_at;
+    if (batchAt) {
+      const { error: cleanError } = await db
+        .from("requirements")
+        .delete()
+        .eq("opportunity_id", opportunityId)
+        .lt("created_at", batchAt);
+      if (cleanError) fail("clear older readiness", cleanError);
+    }
   }
-  const { error: updateError } = await db
-    .from("opportunities")
-    .update({ readiness_pct: readinessPct })
-    .eq("id", opportunityId);
-  if (updateError) fail("save readiness score", updateError);
+  if (!pctUnchanged) {
+    const { error: updateError } = await db
+      .from("opportunities")
+      .update({ readiness_pct: readinessPct })
+      .eq("id", opportunityId);
+    if (updateError) fail("save readiness score", updateError);
+  }
 }

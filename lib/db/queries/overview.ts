@@ -8,6 +8,7 @@ import { REVIEW_STAGES, type ReviewStage } from "@/lib/tenders/stage-review";
 import type { OverviewTender } from "@/lib/overview/build";
 
 import { FIELD_STATUSES, type FieldStatus } from "../vocab";
+import { uniqueByTenderAndText } from "@/lib/readiness/stored";
 import { getServiceClient } from "../supabase-server";
 import { getDemoCompanyProfile } from "./company";
 import { listTenders } from "./tenders";
@@ -135,7 +136,8 @@ async function countMissingMandatory(tenderIds: readonly string[]): Promise<Map<
     .eq("match", "missing")
     .eq("category", "mandatory");
   if (error) fail("load missing documents", error);
-  for (const row of data) {
+  // A requirement saved twice for one tender is one missing document, not two.
+  for (const row of uniqueByTenderAndText(data)) {
     if (!isDocumentToGet(row)) continue;
     counts.set(row.opportunity_id, (counts.get(row.opportunity_id) ?? 0) + 1);
   }

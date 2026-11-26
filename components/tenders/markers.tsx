@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { planDoneText, preparationPill, type PlanState } from "@/lib/plan/state";
 import { RECOMMENDATION_CLASS, RECOMMENDATION_LABEL, type RecommendationLabel } from "@/lib/recommendation/labels";
-import { RISK_CLASS, riskChipLabel } from "@/lib/format/display";
+import { RISK_CLASS, RISK_LABEL, riskChipLabel } from "@/lib/format/display";
 import type { RiskBand } from "@/lib/risk/county-score";
 import { cn } from "@/lib/utils";
 
@@ -30,9 +30,12 @@ export function PlanMarks({ plan }: { plan: PlanState | null | undefined }) {
   );
 }
 
-export function RiskBadge({ band }: { band: RiskBand | null }) {
+/** `short` drops the "County payment risk:" prefix, for a table whose column already says Band. */
+export function RiskBadge({ band, short = false }: { band: RiskBand | null; short?: boolean }) {
   const tone = band ?? "unknown";
-  return <Badge className={cn("h-6 px-2.5", RISK_CLASS[tone])}>{riskChipLabel(band)}</Badge>;
+  return (
+    <Badge className={cn("h-6 px-2.5", RISK_CLASS[tone])}>{short ? RISK_LABEL[tone] : riskChipLabel(band)}</Badge>
+  );
 }
 
 export function ClosedBadge() {

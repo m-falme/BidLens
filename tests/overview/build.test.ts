@@ -109,6 +109,13 @@ describe("row pill and next actions", () => {
     ]);
     expect(nextActions([tender({ finalLabel: "seek_clarification", reviewedStages: ["can_bid"] })]).items).toEqual([]);
   });
+
+  it("leaves out tenders that have closed", () => {
+    const asOf = new Date("2026-11-26T09:00:00+03:00");
+    const closed = tender({ id: "closed", needsHuman: 2 });
+    const open = tender({ id: "open", closing: "30 November 2026", deadlineAt: "2026-11-30T11:00:00+03:00", needsHuman: 1 });
+    expect(nextActions([closed, open], asOf).items.map((item) => item.id)).toEqual(["open:human", "open:decision"]);
+  });
 });
 
 describe("team activity", () => {
